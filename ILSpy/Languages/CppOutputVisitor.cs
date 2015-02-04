@@ -1111,7 +1111,7 @@ namespace QuantKit
         public static string PrintPrimitiveValue(object val)
         {
             StringWriter writer = new StringWriter();
-            var visitor = new CppOutputVisitor(writer, new CSharpFormattingOptions());
+            var visitor = new CppOutputVisitor(writer, FormattingOptionsFactory.CreateAllman());
             visitor.WritePrimitiveValue(val);
             return writer.ToString();
         }

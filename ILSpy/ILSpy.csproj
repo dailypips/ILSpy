@@ -120,6 +120,9 @@
     <Compile Include="CreateListDialog.xaml.cs">
       <DependentUpon>CreateListDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Languages\CppLanguage.cs" />
+    <Compile Include="Languages\CppOutputVisitor.cs" />
+    <Compile Include="Languages\CppTransform.cs" />
     <Compile Include="Languages\CSharpLanguage.cs" />
     <Compile Include="DecompilationOptions.cs" />
     <Compile Include="ExtensionMethods.cs" />
@@ -396,9 +399,7 @@
       <Name>ICSharpCode.TreeView</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="AvalonEdit" />
-  </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
     <Resource Include="Images\ResourceXml.png" />
     <Resource Include="Images\ResourceXsd.png" />

@@ -18,7 +18,12 @@ namespace QuantKit
 			}
 		}
 
-		IEnumerable<IAstTransform> GetTransforms ()
+        IEnumerable<IAstTransform> GetTransforms()
+        {
+            yield return new PropertiesToMethods();
+        }
+
+		/*IEnumerable<IAstTransform> GetTransforms ()
 		{
 			yield return new FixBadNames ();
 			yield return new LiftNestedClasses ();
@@ -74,7 +79,7 @@ namespace QuantKit
 			yield return new CallStaticCtors ();
 			yield return new AddReferences ();
 			yield return new NullableChecks ();
-		}
+		}*/
 
         public class FunctionType : SimpleType
         {
@@ -3500,18 +3505,16 @@ namespace QuantKit
 						Modifiers = p.Modifiers,
 						ReturnType = p.ReturnType.Clone (),
 					};
-					f.Variables.Add (new VariableInitializer (p.Name));
+					f.Variables.Add (new VariableInitializer ("m_" + p.Name));
 					p.ReplaceWith (f);
 				} else {
 
 					foreach (var a in p.Children.OfType<Accessor> ()) {
-//						a.Body.Remove ();
-
 						var getter = a.Role == PropertyDeclaration.GetterRole;
 
 						var fun = new MethodDeclaration {
 							Body = (BlockStatement)a.Body.Clone(),
-							Name = (getter ? "get " : "set ") + p.Name,
+							Name = (getter ? "get" : "set") + p.Name,
 							Modifiers = p.Modifiers,
 						};
 						fun.AddAnnotation (a);

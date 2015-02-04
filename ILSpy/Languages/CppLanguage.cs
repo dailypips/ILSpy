@@ -47,6 +47,8 @@ namespace QuantKit
         bool showAllMembers = false;
         Predicate<IAstTransform> transformAbortCondition = null;
 
+        AstBuilder globalCodeDomBuilder = null;
+
         public CppLanguage()
         {
         }
@@ -79,6 +81,25 @@ namespace QuantKit
         public override string ProjectFileExtension
         {
             get { return ".pro"; }
+        }
+
+        public void DecompileAllIfNeed(ModuleDefinition module, DecompilationOptions options)
+        {
+            if (globalCodeDomBuilder != null)
+                return;
+            var assembly = module.Assembly;
+            globalCodeDomBuilder = CreateAstBuilder(options, currentModule: module);
+            globalCodeDomBuilder.AddAssembly(module.Assembly, onlyAssemblyLevel: false);
+            var transforms = new CppTransform();
+            transforms.Run(globalCodeDomBuilder.SyntaxTree);
+        }
+
+        public void GenerateCode(ITextOutput output)
+        {
+            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
+            var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
+            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
+            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, formattingPolicy));
         }
 
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
@@ -317,10 +338,11 @@ namespace QuantKit
                 // don't automatically load additional assemblies when an assembly node is selected in the tree view
                 using (options.FullDecompilation ? null : LoadedAssembly.DisableAssemblyLoad())
                 {
-                    AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: assembly.ModuleDefinition);
-                    codeDomBuilder.AddAssembly(assembly.ModuleDefinition, onlyAssemblyLevel: !options.FullDecompilation);
-                    codeDomBuilder.RunTransformations(transformAbortCondition);
-                    codeDomBuilder.GenerateCode(output);
+                    DecompileAllIfNeed(assembly.ModuleDefinition, options);
+                    //AstBuilder globalCodeDomBuilder = CreateAstBuilder(options, currentModule: assembly.ModuleDefinition);
+                    //globalCodeDomBuilder.AddAssembly(assembly.ModuleDefinition, onlyAssemblyLevel: false);
+                    //globalCodeDomBuilder.RunTransformations(transformAbortCondition);
+                    globalCodeDomBuilder.GenerateCode(output);
                 }
             }
         }
@@ -628,6 +650,8 @@ namespace QuantKit
                 settings = settings.Clone();
                 settings.UsingDeclarations = false;
             }
+
+
             return new AstBuilder(
                 new DecompilerContext(currentModule)
                 {
