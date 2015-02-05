@@ -3505,7 +3505,7 @@ namespace QuantKit
 						Modifiers = p.Modifiers,
 						ReturnType = p.ReturnType.Clone (),
 					};
-					f.Variables.Add (new VariableInitializer ("m_" + p.Name));
+					f.Variables.Add (new VariableInitializer (CppLanguage.MemberPrefix + p.Name));
 					p.ReplaceWith (f);
 				} else {
 

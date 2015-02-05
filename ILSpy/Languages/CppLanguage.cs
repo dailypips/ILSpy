@@ -68,14 +68,19 @@ namespace QuantKit
             get { return ".cpp";  }
         }
 
-        public string HppFileExtension
+        public static string HppFileExtension
         {
             get { return ".h";  }
         }
 
-        public string PrivateFileSuffix
+        public static string PrivateFileSuffix
         {
             get { return "_p";  }
+        }
+
+        public static string MemberPrefix
+        {
+            get { return "m_"; }
         }
 
         public override string ProjectFileExtension
@@ -94,12 +99,20 @@ namespace QuantKit
             transforms.Run(globalCodeDomBuilder.SyntaxTree);
         }
 
+        public void GenerateCode(AstBuilder codeDomBuilder, ITextOutput output)
+        {
+            codeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
+            var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
+            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
+            codeDomBuilder.SyntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
+        }
+
         public void GenerateCode(ITextOutput output)
         {
             globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, formattingPolicy));
+            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
         }
 
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
@@ -250,7 +263,7 @@ namespace QuantKit
             {
                 AddXmlDocTransform.Run(astBuilder.SyntaxTree);
             }
-            astBuilder.GenerateCode(output);
+            GenerateCode(astBuilder, output);
         }
 
         public static string GetPlatformDisplayName(ModuleDefinition module)
@@ -687,7 +700,7 @@ namespace QuantKit
                     ((ComposedType)astType).PointerRank--;
             }
 
-            astType.AcceptVisitor(new CSharpOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
+            astType.AcceptVisitor(new CppOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
             return w.ToString();
         }
 

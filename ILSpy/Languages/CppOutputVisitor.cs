@@ -27,6 +27,7 @@ using ICSharpCode.NRefactory.PatternMatching;
 using ICSharpCode.NRefactory.TypeSystem;
 using ICSharpCode.NRefactory.CSharp;
 using ICSharpCode.NRefactory;
+using Mono.Cecil;
 
 namespace QuantKit
 {
@@ -1005,6 +1006,11 @@ namespace QuantKit
             StartNode(memberReferenceExpression);
             memberReferenceExpression.Target.AcceptVisitor(this);
             WriteToken(Roles.Dot);
+            var methodref = memberReferenceExpression.Annotation<ModuleDefinition>();
+            if (methodref != null)
+            {
+                WriteIdentifier(methodref.ToString());
+            }
             WriteIdentifier(memberReferenceExpression.MemberName);
             WriteTypeArguments(memberReferenceExpression.TypeArguments);
             EndNode(memberReferenceExpression);
