@@ -3497,6 +3497,22 @@ namespace QuantKit
 				compilationUnit.AcceptVisitor (this);
 			}
 
+			// make property access to method
+			public override void VisitMemberReferenceExpression (MemberReferenceExpression memberReferenceExpression)
+			{
+				base.VisitMemberReferenceExpression (memberReferenceExpression);
+				var annotationRef = memberReferenceExpression.Annotation<PropertyReference> ();
+				var annotationDef = memberReferenceExpression.Annotation<PropertyDefinition> ();
+				if (annotationDef == null && annotationRef != null)
+					annotationDef = annotationRef.Resolve ();
+
+				if (annotationDef == null)
+					return;
+
+				for(var attr in annotationDef.Attributes) {
+
+				}
+			}
 			public override void VisitPropertyDeclaration (PropertyDeclaration p)
 			{
 				if (p.Getter != null && p.Getter.Body.IsNull && p.Setter != null && p.Setter.Body.IsNull) {
