@@ -62,7 +62,7 @@ namespace QuantKit
             if (m != null)
             {
                 output.WriteLine("//Found Method in Tree");
-                m.GenerateCode(output);
+                m.GenerateCode(new TextFormatter(output));
             }
             else
                 output.WriteLine("//Cannot find this method in Syntax Tree");
@@ -76,7 +76,7 @@ namespace QuantKit
             if (p != null)
             {
                 output.WriteLine("//Found Property in Tree");
-                p.GenerateCode(output);
+                p.GenerateCode(new TextFormatter(output));
             }
             else
                 output.WriteLine("//Cannot find this property in Syntax Tree");
@@ -90,7 +90,7 @@ namespace QuantKit
             if (f != null)
             {
                 output.WriteLine("//Found Field in Tree");
-                f.GenerateCode(output);
+                f.GenerateCode(new TextFormatter(output));
             }
             else
                 output.WriteLine("//Cannot find this field in Syntax Tree");
@@ -104,7 +104,7 @@ namespace QuantKit
             if (e != null)
             {
                 output.WriteLine("//Found Event in Tree");
-                e.GenerateCode(output);
+                e.GenerateCode(new TextFormatter(output));
             }
             else
                 output.WriteLine("//Cannot find this Event in Syntax Tree");
@@ -117,7 +117,7 @@ namespace QuantKit
             if (t != null)
             {
                 output.WriteLine("//Found Type in Tree");
-                t.GenerateCode(output);
+                t.GenerateCode(new TextFormatter(output));
             }
             else
                 output.WriteLine("//Cannot find this Type in Syntax Tree");

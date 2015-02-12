@@ -3,7 +3,9 @@ using ICSharpCode.Decompiler.Ast;
 using ICSharpCode.ILSpy;
 using ICSharpCode.NRefactory;
 using ICSharpCode.NRefactory.CSharp;
+using ICSharpCode.NRefactory.TypeSystem;
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -15,10 +17,10 @@ namespace QuantKit
 {
     public interface GenerateCodeAbled
     {
-        void GenerateCode(ITextOutput output);
-        void GenerateHppCode(ITextOutput output);
-        void GenerateCppCode(ITextOutput output);
-        void GeneratePrivateCode(ITextOutput output);
+        void GenerateCode(TextFormatter f);
+        void GenerateHppCode(TextFormatter f);
+        void GenerateCppCode(TextFormatter f);
+        void GeneratePrivateCode(TextFormatter f);
     }
 
     public class QModule : GenerateCodeAbled
@@ -127,21 +129,26 @@ namespace QuantKit
 
         public void PostProcess()
         {
+            // find base type
             foreach (var t in types)
             {
                 var bt = t.def.BaseType;
+                if (bt == null)
+                    continue;
                 foreach (var ft in types)
                 {
-                    if (ft.def == bt && bt != null)
+                    if (ft.def == bt)
                     {
-                        t.bases.Add(ft);
+                        //t.bases.Add(ft);
+                        t.baseType = ft;
                         ft.devires.Add(t);
                     }
                 }
             }
 
+            
             // find inherit interface
-            foreach (var t in types)
+            /*foreach (var t in types)
             {
                 TypeDeclaration decl = t.decl as TypeDeclaration;
                 if (decl != null)
@@ -160,35 +167,48 @@ namespace QuantKit
                         }
                     }
                 }
-            }
+            }*/
         }
 
-        public void GenerateCode(ITextOutput output)
+        public void GenerateCode(TextFormatter f)
         {
-            output.WriteLine("---Hpp---");
-            GenerateHppCode(output);
-            output.WriteLine("---Cpp---");
-            GenerateCppCode(output);
-            output.WriteLine("---Private--");
-            GeneratePrivateCode(output);
+            f.WriteLine("---Hpp---");
+            GenerateHppCode(f);
+            f.WriteLine("---Cpp---");
+            GenerateCppCode(f);
+            f.WriteLine("---Private--");
+            GeneratePrivateCode(f);
         }
 
-        public void GenerateHppCode(ITextOutput output)
-        {
-
-        }
-
-        public void GenerateCppCode(ITextOutput output)
+        public void GenerateHppCode(TextFormatter f)
         {
 
         }
 
-        public void GeneratePrivateCode(ITextOutput output)
+        public void GenerateCppCode(TextFormatter f)
+        {
+
+        }
+
+        public void GeneratePrivateCode(TextFormatter f)
         {
 
         }
     }
 
+    public class QSystemInterface
+    {
+        public QType reference;
+        public string name;
+        public QSystemInterface(QType reference, string name = null)
+        {
+            this.reference = reference;
+            if (name == null)
+                name = reference.def.Name;
+            else
+                this.name = name;
+        }
+    }
     public class QType : GenerateCodeAbled
     {
         public TypeDefinition def;
@@ -201,9 +221,9 @@ namespace QuantKit
         public List<QProperty> properties = new List<QProperty>();
         public List<QField> fields = new List<QField>();
         public List<QEvent> events = new List<QEvent>();
-        public List<QType> bases = new List<QType>();
+        //public List<QType> bases = new List<QType>();
         public List<QType> devires = new List<QType>();
-        public List<QType> interfaces = new List<QType>();
+        //public List<QType> interfaces = new List<QType>();
         public List<QType> impls = new List<QType>();
         public List<QMethod> ctors = new List<QMethod>();
         public List<QProperty> indexers = new List<QProperty>();
@@ -391,6 +411,11 @@ namespace QuantKit
         }
         public void AddCtor(QMethod m)
         {
+            if (m.def.Name == ".cctor")
+            {
+                if (m.decl.GetText().Contains("LicenseManager"))
+                    return;
+            }
             ctors.Add(m);
         }
         public void AddCtor(MethodDefinition def, ConstructorDeclaration decl)
@@ -409,44 +434,197 @@ namespace QuantKit
             AddIndexer(m);
         }
 
-        public void GenerateCode(ITextOutput output)
+        public void GenerateCode(TextFormatter f)
         {
-            GenerateHppCode(output);
-            output.WriteLine();
-            GenerateCppCode(output);
-            output.WriteLine();
-            GeneratePrivateCode(output);
+            GenerateHppCode(f);
+            f.WriteLine();
+            GenerateCppCode(f);
+            f.WriteLine();
+            GeneratePrivateCode(f);
         }
 
-        public void GenerateHppCode(ITextOutput output)
+        void WriteHppFields(TextFormatter f)
         {
-            using (var f = new TextFormatter(output))
+
+        }
+        void WriteHppProperty(TextFormatter f)
+        {
+
+        }
+        void WriteHppMethod(TextFormatter f)
+        {
+
+        }
+        void WriteHppCtor(TextFormatter f)
+        {
+
+        }
+        void WriteHppDtor(TextFormatter f)
+        {
+
+        }
+        void WriteHppTypeBody(TextFormatter f)
+        {
+
+        }
+        void WriteBase(TextFormatter f)
+        {
+            bool first = true;
+            if (tdecl != null)
             {
-                string hname = "__QUANTKIT_" + def.Name.ToUpper() + "_H__";
-                f.Write("#ifndef ");
-                f.Write(hname);
-                f.NewLine();
-                f.Write("#define ");
-                f.Write(hname);
-                f.NewLine();
-                f.Indent();
-
-                f.Unindent();
-                f.Write("#endif // ");
-                f.Write(hname);
-                f.NewLine();
-
+                foreach (var item in tdecl.BaseTypes)
+                {
+                    var dtype = item.ToTypeReference().ToString();
+                    if (first)
+                    {
+                        first = false;
+                        f.Write(" :");
+                    }
+                    else
+                        f.Write(",");
+                    f.Write(" public " + dtype);
+                }
             }
         }
 
-        public void GenerateCppCode(ITextOutput output)
+        void WriteHppEnumBody(TextFormatter f)
         {
-
+            var mlist = tdecl.Descendants.OfType<EnumMemberDeclaration>().ToList();
+            for (int i = 0; i < mlist.Count(); ++i )
+            {
+                    f.Write(mlist[i].GetText());
+                    if (i != mlist.Count() - 1)
+                        f.WriteLine(",");
+                    else
+                        f.NewLine();
+            }
+        }
+        void WriteHppInterfaceTypeBody(TextFormatter f)
+        {
+            if (methods.Count() > 0)
+            {
+                f.Unindent();
+                f.WriteLine("public:");
+                f.Indent();
+                foreach (var item in methods)
+                    item.GenerateHppCode(f);
+            }
         }
 
-        public void GeneratePrivateCode(ITextOutput output)
+        void WriteHppClassTypeBody(TextFormatter f)
         {
+            if (ctors.Count() > 0)
+            {
+                f.Unindent();
+                f.WriteLine("public:");
+                f.Indent();
+                foreach (var item in ctors)
+                    item.GenerateHppCode(f);
+                f.NewLine();
+            }
 
+            if (methods.Count() > 0 || properties.Count() > 0)
+            {
+                f.Unindent();
+                f.WriteLine("public:");
+                f.Indent();
+            }
+
+            foreach (var item in methods)
+                item.GenerateHppCode(f);
+
+            foreach (var item in properties)
+                item.GenerateHppCode(f);
+
+        }
+        void WriteHppTypeHeader(TextFormatter f)
+        {
+            if (def.IsEnum)
+            {
+                //enum
+                f.WriteLine("enum " + def.Name);
+                f.WriteLine("{");
+                f.Indent();
+                WriteHppEnumBody(f);
+                f.Unindent();
+                f.WriteLine("}");
+            }
+            else if (def.IsInterface)
+            {
+                //interface
+                f.Write("class " + def.Name);
+                WriteBase(f);
+                f.NewLine();
+                f.WriteLine("{");
+                f.Indent();
+                WriteHppInterfaceTypeBody(f);
+//                f.NewLine();
+                f.Unindent();
+                f.WriteLine("}");
+            }
+            else if (def.IsClass)
+            {
+                //class
+                f.Write("class " + def.Name);
+                WriteBase(f);
+                f.NewLine();
+                f.WriteLine("{");
+                f.Indent();
+                WriteHppClassTypeBody(f);
+//                f.NewLine();
+                f.Unindent();
+                f.WriteLine("}");
+            }
+        }
+        void WriteHppNameSpace(TextFormatter f)
+        {
+            string nspace = def.Namespace;
+            bool hasNamespace = nspace != null && nspace != "";
+            if (hasNamespace)
+            {
+                f.WriteLine("namespace " + nspace + " {");
+                f.NewLine();
+            }
+
+            WriteHppTypeHeader(f);
+            
+            if (hasNamespace)
+            {
+                f.NewLine();
+                f.WriteLine("} // " + nspace);
+            }
+        }
+        void WriteHppHeader(TextFormatter f)
+        {
+            string hname = "__QUANTKIT_" + def.Name.ToUpper() + "_H__";
+            f.Write("#ifndef ");
+            f.Write(hname);
+            f.NewLine();
+            f.Write("#define ");
+            f.Write(hname);
+            f.NewLine();
+            f.NewLine();
+            WriteHppNameSpace(f);
+            f.NewLine();
+            f.Write("#endif // ");
+            f.Write(hname);
+            f.NewLine();
+        }
+        public void GenerateHppCode(TextFormatter f)
+        {
+                WriteHppHeader(f);
+        }
+
+        public void GenerateCppCode(TextFormatter f)
+        {
+            if (def.IsEnum || def.IsInterface)
+                return;
+        }
+
+        public void GeneratePrivateCode(TextFormatter f)
+        {
+            if(def.IsEnum || def.IsInterface)
+                return;
         }
     }
 
@@ -486,26 +664,92 @@ namespace QuantKit
             cdecl = methoddecl;
         }
 
-        public void GenerateCode(ITextOutput output)
+        public void GenerateCode(TextFormatter f)
         {
-            GenerateHppCode(output);
-            output.WriteLine();
-            GenerateCppCode(output);
-            output.WriteLine();
-            GeneratePrivateCode(output);
+            GenerateHppCode(f);
+            f.WriteLine();
+            GenerateCppCode(f);
+            f.WriteLine();
+            GeneratePrivateCode(f);
         }
 
-        public void GenerateHppCode(ITextOutput output)
+        public static void WriteParameters(AstNode node, QModule module, TextFormatter f)
+        {
+            var plist = node.Descendants.OfType<ParameterDeclaration>().ToList();
+            bool first = true;
+            foreach (var item in plist)
+            {
+                bool isPrimitive;
+                string name = item.Name.Trim();
+                string type = Util.TypeToString(item.Type, out isPrimitive).Trim();
+
+                bool isEnum = false;
+                QType moduleType = null;
+                var ptype = Util.GetTypeRef(item.Type) as TypeDefinition;
+                if(ptype != null)
+                {
+                    moduleType = module.FindType(ptype);
+                    if (moduleType != null)
+                        isEnum = moduleType.def.IsEnum;
+                }
+
+
+                if (!(isPrimitive || isEnum))
+                {
+                    type = "const " + type + "&";
+                }
+                var split = item.GetText().Split('=');
+                string optionValue = null;
+                if (split.Count() > 1)
+                    optionValue = split[split.Count() - 1].Trim();
+                if (first)
+                {
+                    first = false;
+                }
+                else
+                    f.Write(", ");
+                f.Write(type); f.Space();
+                f.Write(name);
+                if (optionValue != null && name == "currencyId" && optionValue == "148")
+                    optionValue = "currencyId.USD";
+                if (optionValue != null)
+                {
+                    f.Write(" = ");
+                    f.Write(optionValue);
+                }
+            }
+        }
+        public void GenerateHppCode(TextFormatter f)
+        {
+            if (mdecl != null)
+            {
+                if (def.IsVirtual || parent.def.IsInterface)
+                    f.Write("virtual ");
+                bool isPrimitive;
+                string type = Util.TypeToString(mdecl.ReturnType, out isPrimitive);
+                f.Write(type);
+                f.Space();
+                f.Write(def.Name);
+                //f.Space();
+                f.Write("(");
+                WriteParameters(mdecl, parent.module, f);
+                f.WriteLine(");");
+            }
+            else // ctor
+            {
+                f.Write(parent.def.Name);
+                f.Write("(");
+                WriteParameters(cdecl, parent.module, f);
+                f.WriteLine(");");
+            }
+        }
+
+        public void GenerateCppCode(TextFormatter f)
         {
 
         }
 
-        public void GenerateCppCode(ITextOutput output)
-        {
-
-        }
-
-        public void GeneratePrivateCode(ITextOutput output)
+        public void GeneratePrivateCode(TextFormatter f)
         {
 
         }
@@ -550,26 +794,69 @@ namespace QuantKit
             this.idecl = decl;
         }
 
-        public void GenerateCode(ITextOutput output)
+        public void GenerateCode(TextFormatter f)
         {
-            GenerateHppCode(output);
-            output.WriteLine();
-            GenerateCppCode(output);
-            output.WriteLine();
-            GeneratePrivateCode(output);
+            GenerateHppCode(f);
+            f.WriteLine();
+            GenerateCppCode(f);
+            f.WriteLine();
+            GeneratePrivateCode(f);
         }
 
-        public void GenerateHppCode(ITextOutput output)
+        public void GenerateHppCode(TextFormatter f)
+        {
+            if (IsIndexer)
+            {
+                var getter = idecl.Getter;
+                if (!getter.IsNull && !getter.HasModifier(Modifiers.Private))
+                {
+                    bool isPrimitive;
+                    string type = Util.TypeToString(idecl.ReturnType, out isPrimitive);
+                    f.Write(type);
+                    f.Write(" getItem"  + "(");
+                    QMethod.WriteParameters(idecl, parent.module, f);
+                    f.WriteLine(");");
+                }
+                var setter = idecl.Setter;
+                if (!setter.IsNull && !setter.HasModifier(Modifiers.Private))
+                {
+                    bool isPrimitive;
+                    string type = Util.TypeToString(idecl.ReturnType, out isPrimitive);
+                    if(!isPrimitive)
+                        type = "const " +type +"& value";
+                    f.Write("void setItem" + "(");
+                    QMethod.WriteParameters(idecl, parent.module, f);
+                    f.WriteLine(");");
+                }          
+            }
+            else
+            {
+                var getter = pdecl.Getter;
+                if (!getter.IsNull && !getter.HasModifier(Modifiers.Private) && !pdecl.HasModifier(Modifiers.Override))
+                {
+                    bool isPrimitive;
+                    string type = Util.TypeToString(pdecl.ReturnType, out isPrimitive);
+                    f.Write(type);
+                    f.WriteLine(" get" + def.Name + "();");
+                }
+                var setter = pdecl.Setter;
+                if (!setter.IsNull && !setter.HasModifier(Modifiers.Private) && !pdecl.HasModifier(Modifiers.Override))
+                {
+                    bool isPrimitive;
+                    string type = Util.TypeToString(pdecl.ReturnType, out isPrimitive);
+                    if(!isPrimitive)
+                        type = "const " +type +"&";
+                     f.WriteLine("void set" + def.Name + "(" + type+" value);");
+                }          
+            }
+        }
+
+        public void GenerateCppCode(TextFormatter f)
         {
 
         }
 
-        public void GenerateCppCode(ITextOutput output)
-        {
-
-        }
-
-        public void GeneratePrivateCode(ITextOutput output)
+        public void GeneratePrivateCode(TextFormatter f)
         {
 
         }
@@ -602,48 +889,42 @@ namespace QuantKit
             this.decl = decl;
         }
 
-        public void GenerateCode(ITextOutput output)
+        public void GenerateCode(TextFormatter f)
         {
-            GenerateHppCode(output);
-            output.WriteLine();
-            GenerateCppCode(output);
-            output.WriteLine();
-            GeneratePrivateCode(output);
+            GenerateHppCode(f);
+            f.WriteLine();
+            GenerateCppCode(f);
+            f.WriteLine();
+            GeneratePrivateCode(f);
         }
 
-        public void GenerateHppCode(ITextOutput output)
+        public void GenerateHppCode(TextFormatter f)
         {
             if (def.IsCompilerGenerated()) return;
-            using( TextFormatter f = new TextFormatter(output)) 
+            if (decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal))
             {
-                if(decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal))
-                {
-                    f.WriteType(FieldType);
-                    f.Space();
-                    f.Write(Name);
-                    f.Write(";");
-                    f.NewLine();
-                }
+                f.WriteType(FieldType);
+                f.Space();
+                f.Write(Name);
+                f.Write(";");
+                f.NewLine();
             }
         }
 
-        public void GenerateCppCode(ITextOutput output)
+        public void GenerateCppCode(TextFormatter f)
         {
 
         }
 
-        public void GeneratePrivateCode(ITextOutput output)
+        public void GeneratePrivateCode(TextFormatter f)
         {
-            using (TextFormatter f = new TextFormatter(output))
+            if (decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal))
             {
-                if (decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal))
-                {
-                    f.WriteType(FieldType);
-                    f.Space();
-                    f.Write(Name);
-                    f.Write(";");
-                    f.NewLine();
-                }
+                f.WriteType(FieldType);
+                f.Space();
+                f.Write(Name);
+                f.Write(";");
+                f.NewLine();
             }
         }
     }
@@ -660,35 +941,477 @@ namespace QuantKit
             this.decl = decl;
         }
 
-        public void GenerateCode(ITextOutput output)
+        public void GenerateCode(TextFormatter f)
         {
-            GenerateHppCode(output);
-            output.WriteLine();
-            GenerateCppCode(output);
-            output.WriteLine();
-            GeneratePrivateCode(output);
+            GenerateHppCode(f);
+            f.WriteLine();
+            GenerateCppCode(f);
+            f.WriteLine();
+            GeneratePrivateCode(f);
         }
 
-        public void GenerateHppCode(ITextOutput output)
+        public void GenerateHppCode(TextFormatter f)
         {
-            var formatter = new TextFormatter(output);
-            formatter.Indent();
+            f.Indent();
             //formatter.Write()
-            formatter.Unindent();
+            f.Unindent();
         }
 
-        public void GenerateCppCode(ITextOutput output)
+        public void GenerateCppCode(TextFormatter f)
         {
 
         }
 
-        public void GeneratePrivateCode(ITextOutput output)
+        public void GeneratePrivateCode(TextFormatter f)
         {
            // output.WriteLine(FieldType.Name + " " + Name + ";");
         }
     }
 
-#region visitor
+    #region Util
+    class Util
+    {
+        public static TypeReference GetTypeRef(AstNode expr)
+        {
+            var td = expr.Annotation<TypeDefinition>();
+            if (td != null)
+            {
+                return td;
+            }
+
+            var tr = expr.Annotation<TypeReference>();
+            if (tr != null)
+            {
+                return tr;
+            }
+
+            var ti = expr.Annotation<ICSharpCode.Decompiler.Ast.TypeInformation>();
+            if (ti != null)
+            {
+                return ti.InferredType;
+            }
+
+            var ilv = expr.Annotation<ICSharpCode.Decompiler.ILAst.ILVariable>();
+            if (ilv != null)
+            {
+                return ilv.Type;
+            }
+
+            var fr = expr.Annotation<FieldDefinition>();
+            if (fr != null)
+            {
+                return fr.FieldType;
+            }
+
+            var pr = expr.Annotation<PropertyDefinition>();
+            if (pr != null)
+            {
+                return pr.PropertyType;
+            }
+
+            var ie = expr as IndexerExpression;
+            if (ie != null)
+            {
+                var it = GetTypeRef(ie.Target);
+                if (it != null && it.IsArray)
+                {
+                    return it.GetElementType();
+                }
+            }
+
+            return null;
+        }
+
+        public static TypeReference GetTargetTypeRef(MemberReferenceExpression memberReferenceExpression)
+        {
+            var pd = memberReferenceExpression.Annotation<PropertyDefinition>();
+            if (pd != null)
+            {
+                return pd.DeclaringType;
+            }
+
+            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
+            if (fd == null)
+                fd = memberReferenceExpression.Annotation<FieldReference>() as FieldDefinition;
+            if (fd != null)
+            {
+                return fd.DeclaringType;
+            }
+
+            return GetTypeRef(memberReferenceExpression.Target);
+        }
+        public static string TypeToString(TypeReference type, out bool isPrimitiveType)
+        {
+            string result = type.Name;
+            isPrimitiveType = false;
+            if(type.IsPrimitive)
+            {
+                isPrimitiveType = true;
+                switch (result)
+                {
+                    case "SByte":
+                        result = "char";
+                        break;
+                    case "Byte":
+                        result = "unsigned char";
+                        break;
+                    case "Boolean":
+                        result = "bool";
+                        break;
+                    case "Int16":
+                        result = "short";
+                        break;
+                    case "UInt16":
+                        result = "unsigned short";
+                        break;
+                    case "Int32":
+                        result = "int";
+                        break;
+                    case "UInt32":
+                        result = "unsigned int";
+                        break;
+                    case "Int64":
+                        result = "long";
+                        break;
+                    case "UInt64":
+                        result = "unsigned long";
+                        break;
+                    case "Single":
+                    case "Double":
+                        result = "double";
+                        break;
+                    case "Char":
+                        result = "char";
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            if (result == "String")
+                result = "QString";
+            else if (result == "DateTime")
+                result = "QDateTime";
+            else if (result == "Void")
+                result = "void";
+
+            return result;
+        }
+        public static string TypeToString(AstType type, out bool isPrimitiveType)
+        {
+            string result = type.GetText();
+            isPrimitiveType = false;
+            PrimitiveType pType = type as PrimitiveType;
+            if (pType != null)
+            {
+                isPrimitiveType = true;
+                var code = pType.KnownTypeCode;
+                switch (code)
+                {
+                    case KnownTypeCode.SByte:
+                        result = "char";
+                        break;
+                    case KnownTypeCode.Byte:
+                        result = "unsigned char";
+                        break;
+                    case KnownTypeCode.String:
+                        result = "QString";
+                        isPrimitiveType = false;
+                        break;
+                    case KnownTypeCode.DateTime:
+                        result = "QDateTime";
+                        isPrimitiveType = false;
+                        break;
+                    default:
+                        result = type.GetText();
+                        break;
+                }
+            }
+
+            return result;
+        }
+
+        public static string TypeToString(TypeReference type, ICustomAttributeProvider typeAttributes = null)
+        {
+            if (type == null)
+                return "NULL TYPE";
+
+            ConvertTypeOptions options = ConvertTypeOptions.IncludeTypeParameterDefinitions;// | ConvertTypeOptions.IncludeNamespace;
+
+            AstType astType = AstBuilder.ConvertType(type, typeAttributes, options);
+
+            StringWriter w = new StringWriter();
+            if (type.IsByReference)
+            {
+                ParameterDefinition pd = typeAttributes as ParameterDefinition;
+                if (pd != null && (!pd.IsIn && pd.IsOut))
+                    w.Write("out ");
+                else
+                    w.Write("ref ");
+
+                if (astType is ComposedType && ((ComposedType)astType).PointerRank > 0)
+                    ((ComposedType)astType).PointerRank--;
+            }
+
+            astType.AcceptVisitor(new CSharpOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
+            return w.ToString();
+        }
+
+        public static string GetTargetTypeString(MemberReferenceExpression memberReferenceExpression)
+        {
+            TypeReference reference = GetTargetTypeRef(memberReferenceExpression);
+            return TypeToString(reference);
+        }
+
+        public static bool IsReferencedBy(TypeDefinition type, TypeReference typeRef)
+        {
+            // TODO: move it to a better place after adding support for more cases.
+            if (type == null)
+                throw new ArgumentNullException("type");
+            if (typeRef == null)
+                throw new ArgumentNullException("typeRef");
+
+            if (type == typeRef)
+                return true;
+            if (type.Name != typeRef.Name)
+                return false;
+            if (type.Namespace != typeRef.Namespace)
+                return false;
+
+            if (type.DeclaringType != null || typeRef.DeclaringType != null)
+            {
+                if (type.DeclaringType == null || typeRef.DeclaringType == null)
+                    return false;
+                if (!IsReferencedBy(type.DeclaringType, typeRef.DeclaringType))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static MemberReference GetOriginalCodeLocation(MemberReference member)
+        {
+            if (member is MethodDefinition)
+                return GetOriginalCodeLocation((MethodDefinition)member);
+            return member;
+        }
+
+        public static MethodDefinition GetOriginalCodeLocation(MethodDefinition method)
+        {
+            if (method.IsCompilerGenerated())
+            {
+                return FindMethodUsageInType(method.DeclaringType, method) ?? method;
+            }
+
+            var typeUsage = GetOriginalCodeLocation(method.DeclaringType);
+
+            return typeUsage ?? method;
+        }
+
+        /// <summary>
+        /// Given a compiler-generated type, returns the method where that type is used.
+        /// Used to detect the 'parent method' for a lambda/iterator/async state machine.
+        /// </summary>
+        public static MethodDefinition GetOriginalCodeLocation(TypeDefinition type)
+        {
+            if (type != null && type.DeclaringType != null && type.IsCompilerGenerated())
+            {
+                if (type.IsValueType)
+                {
+                    // Value types might not have any constructor; but they must be stored in a local var
+                    // because 'initobj' (or 'call .ctor') expects a managed ref.
+                    return FindVariableOfTypeUsageInType(type.DeclaringType, type);
+                }
+                else
+                {
+                    MethodDefinition constructor = GetTypeConstructor(type);
+                    if (constructor == null)
+                        return null;
+                    return FindMethodUsageInType(type.DeclaringType, constructor);
+                }
+            }
+            return null;
+        }
+
+        private static MethodDefinition GetTypeConstructor(TypeDefinition type)
+        {
+            return type.Methods.FirstOrDefault(method => method.Name == ".ctor");
+        }
+
+        private static MethodDefinition FindMethodUsageInType(TypeDefinition type, MethodDefinition analyzedMethod)
+        {
+            string name = analyzedMethod.Name;
+            foreach (MethodDefinition method in type.Methods)
+            {
+                bool found = false;
+                if (!method.HasBody)
+                    continue;
+                foreach (Instruction instr in method.Body.Instructions)
+                {
+                    MethodReference mr = instr.Operand as MethodReference;
+                    if (mr != null && mr.Name == name &&
+                        IsReferencedBy(analyzedMethod.DeclaringType, mr.DeclaringType) &&
+                        mr.Resolve() == analyzedMethod)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                method.Body = null;
+
+                if (found)
+                    return method;
+            }
+            return null;
+        }
+
+        private static MethodDefinition FindVariableOfTypeUsageInType(TypeDefinition type, TypeDefinition variableType)
+        {
+            foreach (MethodDefinition method in type.Methods)
+            {
+                bool found = false;
+                if (!method.HasBody)
+                    continue;
+                foreach (var v in method.Body.Variables)
+                {
+                    if (v.VariableType.ResolveWithinSameModule() == variableType)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                method.Body = null;
+
+                if (found)
+                    return method;
+            }
+            return null;
+        }
+
+        public static TypeDefinition GetTypeDef(AstNode expr)
+        {
+            var tr = GetTypeRef(expr);
+            var td = tr as TypeDefinition;
+            if (td == null && tr != null)
+                td = tr.Resolve();
+            return td;
+        }
+
+        /*public static TypeReference GetTypeRef(AstNode expr)
+        {
+            var td = expr.Annotation<TypeDefinition>();
+            if (td != null)
+            {
+                return td;
+            }
+
+            var tr = expr.Annotation<TypeReference>();
+            if (tr != null)
+            {
+                return tr;
+            }
+
+            var ti = expr.Annotation<ICSharpCode.Decompiler.Ast.TypeInformation>();
+            if (ti != null)
+            {
+                return ti.InferredType;
+            }
+
+            var ilv = expr.Annotation<ICSharpCode.Decompiler.ILAst.ILVariable>();
+            if (ilv != null)
+            {
+                return ilv.Type;
+            }
+
+            var fr = expr.Annotation<FieldDefinition>();
+            if (fr != null)
+            {
+                return fr.FieldType;
+            }
+
+            var pr = expr.Annotation<PropertyDefinition>();
+            if (pr != null)
+            {
+                return pr.PropertyType;
+            }
+
+            var ie = expr as IndexerExpression;
+            if (ie != null)
+            {
+                var it = GetTypeRef(ie.Target);
+                if (it != null && it.IsArray)
+                {
+                    return it.GetElementType();
+                }
+            }
+
+            return null;
+        }
+
+        public static TypeReference GetTargetTypeRef(MemberReferenceExpression memberReferenceExpression)
+        {
+            var pd = memberReferenceExpression.Annotation<PropertyDefinition>();
+            if (pd != null)
+            {
+                return pd.DeclaringType;
+            }
+
+            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
+            if (fd == null)
+                fd = memberReferenceExpression.Annotation<FieldReference>() as FieldDefinition;
+            if (fd != null)
+            {
+                return fd.DeclaringType;
+            }
+
+            return GetTypeRef(memberReferenceExpression.Target);
+        }*/
+
+        public static string GetClassName(AstNode expr)
+        {
+            string className = "";
+            var plist = expr.Ancestors.OfType<TypeDeclaration>().ToList();
+            if (plist.Count > 0)
+            {
+                className = plist[0].Name;
+            }
+            return className;
+        }
+
+        public static string GetClassBaseName(AstNode expr)
+        {
+            string baseName = "";
+            var typedecl = expr as TypeDeclaration;
+
+            if (typedecl == null)
+            {
+                var plist = expr.Ancestors.OfType<TypeDeclaration>().ToList();
+                if (plist.Count > 0)
+                {
+                    TypeDeclaration type = plist[0];
+                    var blist = type.BaseTypes.ToList();
+                    if (blist.Count() > 0)
+                    {
+                        baseName = blist[0].GetText();
+                    }
+                }
+            }
+            else
+            {
+                var blist = typedecl.BaseTypes.ToList();
+                if (blist.Count() > 0)
+                {
+                    baseName = blist[0].GetText();
+                }
+            }
+            return baseName;
+        }
+    }
+
+    #endregion
+    #region visitor
     class QModuleVisitor : DepthFirstAstVisitor
     {
         QModule module;
@@ -813,7 +1536,7 @@ namespace QuantKit
 #region formatter
     public class TextFormatter : IDisposable
     {
-        readonly ITextOutput output;
+        public readonly ITextOutput output;
         int indentation;
         bool needsIndent = true;
         //bool isAtStartOfLine = true;
@@ -855,9 +1578,19 @@ namespace QuantKit
             //isAtStartOfLine = false;
         }
 
+        public void WriteLine(string content)
+        {
+            Write(content);
+            NewLine();
+        }
+        public void WriteLine()
+        {
+            NewLine();
+        }
         public void WriteType(TypeReference r)
         {
-            string real = (r.IsPrimitive && r.Name == "Byte") ? "unsigned char" : r.Name;
+            bool isPrimitive;
+            string real = Util.TypeToString(r, out isPrimitive);
             Write(real);
         }
 
