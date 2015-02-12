@@ -88,6 +88,13 @@ namespace QuantKit
             get { return ".pro"; }
         }
 
+        public AstBuilder codeDomBuilder
+        {
+            get {
+                return globalCodeDomBuilder; 
+            }
+        }
+
         public void DecompileAllIfNeed(ModuleDefinition module, DecompilationOptions options)
         {
             if (globalCodeDomBuilder != null)
@@ -97,11 +104,12 @@ namespace QuantKit
             globalCodeDomBuilder.AddAssembly(module.Assembly, onlyAssemblyLevel: false);
             var transforms = new CppTransform();
             transforms.Run(globalCodeDomBuilder.SyntaxTree);
+            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
         }
 
         public void GenerateCode(AstBuilder codeDomBuilder, ITextOutput output)
         {
-            codeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
+         //   codeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
             codeDomBuilder.SyntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
@@ -109,17 +117,200 @@ namespace QuantKit
 
         public void GenerateCode(ITextOutput output)
         {
-            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
+           // globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
             globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
         }
 
+        public void GenerateCode(AstNode node, ITextOutput output)
+        {
+            var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
+            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
+            node.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
+        }
+
+        class MethodFind : DepthFirstAstVisitor
+        {
+            AstNode m_node = null;
+            MethodDefinition method;
+            SyntaxTree syntaxTree;
+            public AstNode node
+            {
+                get
+                {
+                    if (m_node == null)
+                        getNode();
+
+                    return m_node;
+                }
+            }
+            public MethodFind(MethodDefinition md, SyntaxTree tree)
+            {
+                method = md;
+                syntaxTree = tree;
+            }
+
+            public void getNode()
+            {
+                syntaxTree.AcceptVisitor(this);
+            }
+            public override void VisitMethodDeclaration(MethodDeclaration methodDeclaration)
+            {
+                base.VisitMethodDeclaration(methodDeclaration);
+                var anon = methodDeclaration.Annotation<MethodDefinition>();
+                if (anon != null && anon == method)
+                    m_node = methodDeclaration;
+            }
+        }
+
+        class PropertyFind : DepthFirstAstVisitor
+        {
+            AstNode m_node = null;
+            PropertyDefinition property;
+            SyntaxTree syntaxTree;
+            public AstNode node
+            {
+                get
+                {
+                    if (m_node == null)
+                        getNode();
+
+                    return m_node;
+                }
+            }
+            public PropertyFind(PropertyDefinition pd, SyntaxTree tree)
+            {
+                property = pd;
+                syntaxTree = tree;
+            }
+
+            public void getNode()
+            {
+                syntaxTree.AcceptVisitor(this);
+            }
+            public override void VisitPropertyDeclaration(PropertyDeclaration propertyDeclaration)
+            {
+                base.VisitPropertyDeclaration(propertyDeclaration);
+                var anon = propertyDeclaration.Annotation<PropertyDefinition>();
+                if (anon != null && anon == property)
+                    m_node = propertyDeclaration;
+            }
+        }
+
+        class FieldFind : DepthFirstAstVisitor
+        {
+            AstNode m_node = null;
+            FieldDefinition field;
+            SyntaxTree syntaxTree;
+            public AstNode node
+            {
+                get
+                {
+                    if (m_node == null)
+                        getNode();
+
+                    return m_node;
+                }
+            }
+            public FieldFind(FieldDefinition fd, SyntaxTree tree)
+            {
+                field = fd;
+                syntaxTree = tree;
+            }
+
+            public void getNode()
+            {
+                syntaxTree.AcceptVisitor(this);
+            }
+            public override void VisitFieldDeclaration(FieldDeclaration fieldDeclaration)
+            {
+                base.VisitFieldDeclaration(fieldDeclaration);
+                var anon = fieldDeclaration.Annotation<FieldDefinition>();
+                if (anon != null && anon == field)
+                    m_node = fieldDeclaration;
+            }
+        }
+        class TypeFind : DepthFirstAstVisitor
+        {
+            AstNode m_node = null;
+            TypeDefinition type;
+            SyntaxTree syntaxTree;
+            public AstNode node
+            {
+                get
+                {
+                    if (m_node == null)
+                        getNode();
+
+                    return m_node;
+                }
+            }
+            public TypeFind(TypeDefinition td, SyntaxTree tree)
+            {
+                type = td;
+                syntaxTree = tree;
+            }
+
+            public void getNode()
+            {
+                syntaxTree.AcceptVisitor(this);
+            }
+            public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
+            {
+                base.VisitTypeDeclaration(typeDeclaration);
+                var anon = typeDeclaration.Annotation<TypeDefinition>();
+                if (anon != null && anon == type)
+                    m_node = typeDeclaration;
+            }
+        }
+        class EventFind : DepthFirstAstVisitor
+        {
+            AstNode m_node = null;
+            EventDefinition e;
+            SyntaxTree syntaxTree;
+            public AstNode node
+            {
+                get
+                {
+                    if (m_node == null)
+                        getNode();
+
+                    return m_node;
+                }
+            }
+            public EventFind(EventDefinition ed, SyntaxTree tree)
+            {
+                e = ed;
+                syntaxTree = tree;
+            }
+
+            public void getNode()
+            {
+                syntaxTree.AcceptVisitor(this);
+            }
+            public override void VisitEventDeclaration(EventDeclaration eventDeclaration)
+            {
+                base.VisitEventDeclaration(eventDeclaration);
+                var anon = eventDeclaration.Annotation<EventDefinition>();
+                if (anon != null && anon == e)
+                    m_node = eventDeclaration;
+            }
+        }
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(method.DeclaringType, includeNamespace: true));
-            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: method.DeclaringType, isSingleMember: true);
-            if (method.IsConstructor && !method.IsStatic && !method.DeclaringType.IsValueType)
+            DecompileAllIfNeed(method.Module, options);
+            var finder = new MethodFind(method, codeDomBuilder.SyntaxTree);
+            if (finder.node != null)
+            {
+                output.WriteLine("//Found Method in Tree");
+                GenerateCode(finder.node, output);
+            }
+            else
+                output.WriteLine("Cannot find this method in Syntax Tree");
+            //AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: method.DeclaringType, isSingleMember: true);
+           /* if (method.IsConstructor && !method.IsStatic && !method.DeclaringType.IsValueType)
             {
                 // also fields and other ctors so that the field initializers can be shown as such
                 AddFieldsAndCtors(codeDomBuilder, method.DeclaringType, method.IsStatic);
@@ -129,7 +320,7 @@ namespace QuantKit
             {
                 codeDomBuilder.AddMethod(method);
                 RunTransformsAndGenerateCode(codeDomBuilder, output, options);
-            }
+            }*/
         }
 
         class SelectCtorTransform : IAstTransform
@@ -177,15 +368,30 @@ namespace QuantKit
         public override void DecompileProperty(PropertyDefinition property, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(property.DeclaringType, includeNamespace: true));
-            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: property.DeclaringType, isSingleMember: true);
-            codeDomBuilder.AddProperty(property);
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options);
+            DecompileAllIfNeed(property.Module, options);
+            var finder = new PropertyFind(property, codeDomBuilder.SyntaxTree);
+            if (finder.node != null)
+            {
+                output.WriteLine("//Found Property in Tree");
+                GenerateCode(finder.node, output);
+            }
+            else
+                output.WriteLine("Cannot find this property in Syntax Tree");
         }
 
         public override void DecompileField(FieldDefinition field, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(field.DeclaringType, includeNamespace: true));
-            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: field.DeclaringType, isSingleMember: true);
+            DecompileAllIfNeed(field.Module, options);
+            var finder = new FieldFind(field, codeDomBuilder.SyntaxTree);
+            if (finder.node != null)
+            {
+                output.WriteLine("//Found Field in Tree");
+                GenerateCode(finder.node, output);
+            }
+            else
+                output.WriteLine("Cannot find this field in Syntax Tree");
+           /* AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: field.DeclaringType, isSingleMember: true);
             if (field.IsLiteral)
             {
                 codeDomBuilder.AddField(field);
@@ -195,7 +401,7 @@ namespace QuantKit
                 // also decompile ctors so that the field initializer can be shown
                 AddFieldsAndCtors(codeDomBuilder, field.DeclaringType, field.IsStatic);
             }
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options, new SelectFieldTransform(field));
+            RunTransformsAndGenerateCode(codeDomBuilder, output, options, new SelectFieldTransform(field));*/
         }
 
         /// <summary>
@@ -240,16 +446,34 @@ namespace QuantKit
         public override void DecompileEvent(EventDefinition ev, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(ev.DeclaringType, includeNamespace: true));
-            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: ev.DeclaringType, isSingleMember: true);
+            DecompileAllIfNeed(ev.Module, options);
+            var finder = new EventFind(ev, codeDomBuilder.SyntaxTree);
+            if (finder.node != null)
+            {
+                output.WriteLine("//Found Event in Tree");
+                GenerateCode(finder.node, output);
+            }
+            else
+                output.WriteLine("Cannot find this Event in Syntax Tree");
+            /*AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: ev.DeclaringType, isSingleMember: true);
             codeDomBuilder.AddEvent(ev);
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options);
+            RunTransformsAndGenerateCode(codeDomBuilder, output, options);*/
         }
 
         public override void DecompileType(TypeDefinition type, ITextOutput output, DecompilationOptions options)
         {
-            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: type);
+            DecompileAllIfNeed(type.Module, options);
+            var finder = new TypeFind(type, codeDomBuilder.SyntaxTree);
+            if (finder.node != null)
+            {
+                output.WriteLine("//Found Type in Tree");
+                GenerateCode(finder.node, output);
+            }
+            else
+                output.WriteLine("Cannot find this Type in Syntax Tree");
+            /*AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: type);
             codeDomBuilder.AddType(type);
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options);
+            RunTransformsAndGenerateCode(codeDomBuilder, output, options);*/
         }
 
         void RunTransformsAndGenerateCode(AstBuilder astBuilder, ITextOutput output, DecompilationOptions options, IAstTransform additionalTransform = null)

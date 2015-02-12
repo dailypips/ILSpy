@@ -6,6 +6,11 @@ using ICSharpCode.NRefactory.CSharp;
 using ICSharpCode.NRefactory.TypeSystem;
 using Mono.Cecil;
 using ICSharpCode.NRefactory;
+using System.Collections.Concurrent;
+using System.Threading;
+using Mono.Cecil.Cil;
+using ICSharpCode.ILSpy.TreeNodes.Analyzer;
+using ICSharpCode.Decompiler;
 
 namespace QuantKit
 {
@@ -13,9 +18,9 @@ namespace QuantKit
 	{
 		public void Run (AstNode compilationUnit)
 		{
-			foreach (var t in GetTransforms ()) {
+			/*foreach (var t in GetTransforms ()) {
 				t.Run (compilationUnit);
-			}
+			}*/
 		}
 
         IEnumerable<IAstTransform> GetTransforms()
@@ -3492,29 +3497,33 @@ namespace QuantKit
 
 		class PropertiesToMethods : DepthFirstAstVisitor, IAstTransform
 		{
-			public void Run (AstNode compilationUnit)
-			{
-				compilationUnit.AcceptVisitor (this);
-			}
 
-			// make property access to method
-			public override void VisitMemberReferenceExpression (MemberReferenceExpression memberReferenceExpression)
-			{
-				base.VisitMemberReferenceExpression (memberReferenceExpression);
-				var annotationRef = memberReferenceExpression.Annotation<PropertyReference> ();
-				var annotationDef = memberReferenceExpression.Annotation<PropertyDefinition> ();
-				if (annotationDef == null && annotationRef != null)
-					annotationDef = annotationRef.Resolve ();
+            public void Run(AstNode compilationUnit)
+            {
+                compilationUnit.AcceptVisitor(this);
+            }
 
-				if (annotationDef == null)
-					return;
+            void ReplacePropertyReferenceAccessToMethod(PropertyDefinition pd)
+            {
+                var gmd = pd.GetMethod;
+                var smd = pd.SetMethod;
 
-				for(var attr in annotationDef.Attributes) {
+                var gnode = new AnalyzedMethodUsedByTreeNode(gmd);
+                var token = new CancellationToken();
+                //foreach (var node in gnode.Children)
+                //{
 
-				}
-			}
+                //}
+            }
+
+            
+
 			public override void VisitPropertyDeclaration (PropertyDeclaration p)
 			{
+                var pd = p.Annotation<PropertyDefinition>();
+
+                if (pd != null) ReplacePropertyReferenceAccessToMethod(pd);
+
 				if (p.Getter != null && p.Getter.Body.IsNull && p.Setter != null && p.Setter.Body.IsNull) {
 
 					var f = new FieldDeclaration {
