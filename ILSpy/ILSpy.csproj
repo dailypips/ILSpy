@@ -120,7 +120,8 @@
     <Compile Include="CreateListDialog.xaml.cs">
       <DependentUpon>CreateListDialog.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Languages\AstLanguage.cs" />
+    <Compile Include="Languages\QAstLanguage.cs" />
+    <Compile Include="Languages\QAstWrite.cs" />
     <Compile Include="Languages\CppLanguage.cs" />
     <Compile Include="Languages\CppOutputVisitor.cs" />
     <Compile Include="Languages\CppTransform.cs" />
@@ -145,6 +146,7 @@
     <Compile Include="Languages\Language.cs" />
     <Compile Include="Images\Images.cs" />
     <Compile Include="Languages\Languages.cs" />
+    <Compile Include="Languages\QAst.cs" />
     <Compile Include="LoadedAssembly.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="NavigationHistory.cs" />
