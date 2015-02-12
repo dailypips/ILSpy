@@ -20,7 +20,12 @@ using ICSharpCode.ILSpy;
 
 namespace QuantKit
 {
-    public class QModule
+    public interface GenerateCodeAbled
+    {
+        void GenerateCode(ITextOutput output);
+    }
+
+    public class QModule  : GenerateCodeAbled
     {
         public ModuleDefinition mdef;
         public List<QType> types = new List<QType>();
@@ -111,9 +116,14 @@ namespace QuantKit
                 }
             }
         }
+
+        public void GenerateCode(ITextOutput output)
+        {
+
+        }
     }
 
-    public class QType
+    public class QType : GenerateCodeAbled
     {
         public TypeDefinition def;
         TypeDeclaration tdecl = null;
@@ -280,7 +290,7 @@ namespace QuantKit
         {
             foreach(var item in fields)
             {
-                if (item.fdecl == decl)
+                if (item.decl == decl)
                     return item;
             }
             return null;
@@ -308,7 +318,7 @@ namespace QuantKit
         {
             foreach(var item in events)
             {
-                if (item.edecl == decl)
+                if (item.decl == decl)
                     return item;
             }
             return null;
@@ -332,9 +342,14 @@ namespace QuantKit
             var m = new QProperty(this, def, decl);
             AddIndexer(m);
         }
+
+        public void GenerateCode(ITextOutput output)
+        {
+
+        }
     }
 
-    public class QMethod
+    public class QMethod : GenerateCodeAbled
     {
         public MethodDefinition def;
         MethodDeclaration mdecl = null;
@@ -369,13 +384,20 @@ namespace QuantKit
             def = methoddef;
             cdecl = methoddecl;
         }
+
+        public void GenerateCode(ITextOutput output)
+        {
+
+        }
     }
 
-    public class QProperty
+    public class QProperty : GenerateCodeAbled
     {
         public PropertyDefinition def;
         PropertyDeclaration pdecl = null;
         IndexerDeclaration idecl = null;
+        public QType parent;
+
         public bool IsIndexer
         {
             get
@@ -383,7 +405,6 @@ namespace QuantKit
                 return def.IsIndexer();
             }
         }
-        public QType parent;
 
         public AstNode decl
         {
@@ -408,31 +429,46 @@ namespace QuantKit
             this.def = def;
             this.idecl = decl;
         }
-    }
 
-    public class QField
-    {
-        public FieldDefinition def;
-        public FieldDeclaration fdecl;
-        public QType parent;
-        public QField(QType parent, FieldDefinition fielddef, FieldDeclaration fielddecl)
+        public void GenerateCode(ITextOutput output)
         {
-            this.parent = parent;
-            def = fielddef;
-            fdecl = fielddecl;
+
         }
     }
 
-    public class QEvent
+    public class QField : GenerateCodeAbled
     {
-        public EventDefinition def;
-        public EventDeclaration edecl;
+        public FieldDefinition def;
+        public FieldDeclaration decl;
         public QType parent;
-        public QEvent(QType parent,EventDefinition eventdef, EventDeclaration eventdecl)
+        public QField(QType parent, FieldDefinition def, FieldDeclaration decl)
         {
             this.parent = parent;
-            def = eventdef;
-            edecl = eventdecl;
+            this.def = def;
+            this.decl = decl;
+        }
+
+        public void GenerateCode(ITextOutput output)
+        {
+
+        }
+    }
+
+    public class QEvent : GenerateCodeAbled
+    {
+        public EventDefinition def;
+        public EventDeclaration decl;
+        public QType parent;
+        public QEvent(QType parent,EventDefinition def, EventDeclaration decl)
+        {
+            this.parent = parent;
+            this.def = def;
+            this.decl = decl;
+        }
+
+        public void GenerateCode(ITextOutput output)
+        {
+
         }
     }
 
@@ -586,7 +622,7 @@ namespace QuantKit
             if (f != null)
             {
                 output.WriteLine("//Found Field in Tree");
-                GenerateCode(f.fdecl, output);
+                GenerateCode(f.decl, output);
             }
             else
                 output.WriteLine("//Cannot find this field in Syntax Tree");
@@ -600,7 +636,7 @@ namespace QuantKit
             if (e != null)
             {
                 output.WriteLine("//Found Event in Tree");
-                GenerateCode(e.edecl, output);
+                GenerateCode(e.decl, output);
             }
             else
                 output.WriteLine("//Cannot find this Event in Syntax Tree");
