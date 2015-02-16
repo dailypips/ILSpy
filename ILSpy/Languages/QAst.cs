@@ -146,9 +146,8 @@ namespace QuantKit
                 }
             }
 
-            
-            // find inherit interface
-            /*foreach (var t in types)
+            // find interface
+            foreach(var t in types)
             {
                 TypeDeclaration decl = t.decl as TypeDeclaration;
                 if (decl != null)
@@ -156,18 +155,34 @@ namespace QuantKit
                     foreach (var bt in decl.BaseTypes)
                     {
                         var dtype = bt.ToTypeReference().ToString();
-                        foreach (var ft in types)
+                        if (t.baseType != null && dtype == t.baseType.def.Name)
+                            continue;
+                        bool found = false;
+                        foreach(var ft in types)
                         {
-                            if (ft.def.IsInterface)
-                                if (ft.def.Name == dtype)
+                            if(ft.def.IsInterface)
+                                if(ft.def.Name == dtype)
                                 {
                                     t.interfaces.Add(ft);
                                     ft.impls.Add(t);
+                                    found = true;
                                 }
                         }
+                        if (!found)
+                            t.externalInterfaces.Add(dtype);
                     }
                 }
-            }*/
+            }
+
+            foreach (var t in types)
+            {
+                t.preProcess();
+            }
+
+            foreach(var t in types)
+            {
+                t.postProcess();
+            }
         }
 
         public void GenerateCode(TextFormatter f)
@@ -196,19 +211,7 @@ namespace QuantKit
         }
     }
 
-    public class QSystemInterface
-    {
-        public QType reference;
-        public string name;
-        public QSystemInterface(QType reference, string name = null)
-        {
-            this.reference = reference;
-            if (name == null)
-                name = reference.def.Name;
-            else
-                this.name = name;
-        }
-    }
+
     public class QType : GenerateCodeAbled
     {
         public TypeDefinition def;
@@ -220,13 +223,18 @@ namespace QuantKit
         public List<QMethod> methods = new List<QMethod>();
         public List<QProperty> properties = new List<QProperty>();
         public List<QField> fields = new List<QField>();
+        public List<QField> constFields = new List<QField>();
         public List<QEvent> events = new List<QEvent>();
         //public List<QType> bases = new List<QType>();
         public List<QType> devires = new List<QType>();
-        //public List<QType> interfaces = new List<QType>();
+        public List<QType> interfaces = new List<QType>();
+        public List<string> externalInterfaces = new List<string>();
         public List<QType> impls = new List<QType>();
         public List<QMethod> ctors = new List<QMethod>();
         public List<QProperty> indexers = new List<QProperty>();
+        public HashSet<QType> includes = new HashSet<QType>();
+        public HashSet<string> externalIncludes = new HashSet<string>();
+
 
         public QType(QModule parent, TypeDefinition def, TypeDeclaration decl)
         {
@@ -285,6 +293,7 @@ namespace QuantKit
                 if (item.def == def)
                     return item;
             }
+
             return null;
         }
 
@@ -356,7 +365,11 @@ namespace QuantKit
         }
         public void AddField(QField f)
         {
-            fields.Add(f);
+            var fdecl = f.decl;
+            if (fdecl.HasModifier(Modifiers.Const))
+                constFields.Add(f);
+            else
+                fields.Add(f);
         }
         public void AddField(FieldDefinition fdef, FieldDeclaration fdecl)
         {
@@ -434,6 +447,83 @@ namespace QuantKit
             AddIndexer(m);
         }
 
+        public void preProcess()
+        {
+            // process methods
+            foreach (var m in methods)
+            {
+                m.postProgress();
+            }
+
+            foreach (var c in ctors)
+            {
+                c.postProgress();
+            }
+
+            // find field readby
+            foreach (var f in fields)
+            {
+                foreach (var ft in module.types)
+                {
+                    var method = Util.FindFieldUsageInType(ft.def, f.def, true);
+                    if (method != null)
+                        f.ReadBy.Add(method);
+                }
+            }
+
+            // find Field AssignBy
+            foreach (var f in fields)
+            {
+                foreach (var ft in module.types)
+                {
+                    var method = Util.FindFieldUsageInType(ft.def, f.def, false);
+                    if (method != null)
+                        f.WriteBy.Add(method);
+                }
+            }
+            // find Property ReadBy
+            foreach (var p in properties)
+            {
+                var getter = p.def.GetMethod;
+                if (getter == null)
+                    continue;
+                foreach (var ft in module.types)
+                {
+                    var method = Util.FindMethodUsageInType(ft.def, getter);
+                    if (method != null)
+                        p.GetBy.Add(method);
+                }
+            }
+            // find Property Write
+            foreach (var p in properties)
+            {
+                var setter = p.def.SetMethod;
+                if (setter == null)
+                    continue;
+                foreach (var ft in module.types)
+                {
+                    var method = Util.FindMethodUsageInType(ft.def, setter);
+                    if (method != null)
+                        p.SetBy.Add(method);
+                }
+            }
+
+        }
+
+        void FieldRename()
+        {
+
+        }
+        void PropertyRename()
+        {
+
+        }
+        public void postProcess()
+        {
+            FieldRename();
+            PropertyRename();
+        }
+
         public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
@@ -467,7 +557,7 @@ namespace QuantKit
         {
 
         }
-        void WriteBase(TextFormatter f)
+        void WriteHppBase(TextFormatter f)
         {
             bool first = true;
             if (tdecl != null)
@@ -520,6 +610,10 @@ namespace QuantKit
                 f.Indent();
                 foreach (var item in ctors)
                     item.GenerateHppCode(f);
+                //if (devires.Count() > 0)
+                //{
+                    f.WriteLine("~" + def.Name + "();");
+                //}
                 f.NewLine();
             }
 
@@ -534,6 +628,12 @@ namespace QuantKit
                 item.GenerateHppCode(f);
 
             foreach (var item in properties)
+                item.GenerateHppCode(f);
+
+            //foreach (var item in fields)
+            //    item.GenerateHppCode(f);
+
+            foreach (var item in constFields)
                 item.GenerateHppCode(f);
 
         }
@@ -552,8 +652,8 @@ namespace QuantKit
             else if (def.IsInterface)
             {
                 //interface
-                f.Write("class " + def.Name);
-                WriteBase(f);
+                f.Write("class QUANTKIT_EXPORT " + def.Name);
+                WriteHppBase(f);
                 f.NewLine();
                 f.WriteLine("{");
                 f.Indent();
@@ -565,8 +665,8 @@ namespace QuantKit
             else if (def.IsClass)
             {
                 //class
-                f.Write("class " + def.Name);
-                WriteBase(f);
+                f.Write("class QUANTKIT_EXPORT " + def.Name);
+                WriteHppBase(f);
                 f.NewLine();
                 f.WriteLine("{");
                 f.Indent();
@@ -584,14 +684,32 @@ namespace QuantKit
             {
                 f.WriteLine("namespace " + nspace + " {");
                 f.NewLine();
+                f.WriteLine("namespace Internal { class " + def.Name + "Private; }");
+                f.WriteLine();
             }
-
             WriteHppTypeHeader(f);
             
             if (hasNamespace)
             {
                 f.NewLine();
                 f.WriteLine("} // " + nspace);
+            }
+        }
+        void WriteHppInclude(TextFormatter f)
+        {
+            f.WriteLine("#include <QuantKit/quantkit_global.h>");
+            foreach (var item in externalIncludes)
+            {
+                f.Write("#include <");
+                f.Write(item);
+                f.WriteLine(">");
+            }
+            f.WriteLine("#include <QSharedDataPointer>");
+            foreach(var item in includes)
+            {
+                f.Write("#include <QuantKit/");
+                f.Write(item.def.Name);
+                f.WriteLine(".h>");
             }
         }
         void WriteHppHeader(TextFormatter f)
@@ -603,6 +721,8 @@ namespace QuantKit
             f.Write("#define ");
             f.Write(hname);
             f.NewLine();
+            f.NewLine();
+            WriteHppInclude(f);
             f.NewLine();
             WriteHppNameSpace(f);
             f.NewLine();
@@ -628,12 +748,32 @@ namespace QuantKit
         }
     }
 
+    public class QParameter
+    {
+        public QType type;
+        public string typeName;
+        public string externalType;
+        public string name;
+        public string optionValue;
+        public QMethod parent;
+        public bool isPrimitive = false;
+        public bool isEnum = false;
+        //public bool isCtor = false;
+        public QParameter(QMethod method)
+        {
+            this.parent = method;
+        }
+    }
+
     public class QMethod : GenerateCodeAbled
     {
         public MethodDefinition def;
         MethodDeclaration mdecl = null;
         ConstructorDeclaration cdecl = null;
         public QType parent;
+        public List<QParameter> parameters = new List<QParameter>();
+        public List<string> body = new List<string>();
+
         public bool IsConstructor
         {
             get
@@ -673,12 +813,53 @@ namespace QuantKit
             GeneratePrivateCode(f);
         }
 
-        public static void WriteParameters(AstNode node, QModule module, TextFormatter f)
+        void processBody()
         {
-            var plist = node.Descendants.OfType<ParameterDeclaration>().ToList();
-            bool first = true;
+            var csharpText = new StringWriter();
+            var csharpoutput = new PlainTextOutput(csharpText);
+            var outputFormatter = new TextOutputFormatter(csharpoutput) { FoldBraces = true };
+            decl.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, FormattingOptionsFactory.CreateAllman()));
+            var blist = decl.Descendants.OfType<BlockStatement>().ToList();
+
+            string b = csharpText.ToString();
+            var bb = b.Replace("\r\n", "\n");
+            var bodylist = bb.Split('\n');
+            var tlist = new List<string>();
+            foreach (var item in bodylist)
+            {
+                var stat = item.Trim();
+                tlist.Add(stat);
+            }
+            tlist.RemoveAt(0); // delete method define
+            if (tlist.Count() > 0)
+            {
+                if (tlist[0] == "{")
+                    tlist.RemoveAt(0);
+
+                while (tlist.Count() > 0)
+                {
+                    if (tlist[tlist.Count() - 1] == "")
+                        tlist.RemoveAt(tlist.Count() - 1);
+                    else
+                        break;
+                }
+
+                if (tlist.Count() > 0)
+                {
+                    if (tlist[tlist.Count() - 1] == "}")
+                        tlist.RemoveAt(tlist.Count() - 1);
+                }
+            }
+            body = tlist;
+        }
+
+        void processParameters()
+        {
+            var plist = decl.Descendants.OfType<ParameterDeclaration>().ToList();
             foreach (var item in plist)
             {
+                var p = new QParameter(this);
+
                 bool isPrimitive;
                 string name = item.Name.Trim();
                 string type = Util.TypeToString(item.Type, out isPrimitive).Trim();
@@ -686,22 +867,66 @@ namespace QuantKit
                 bool isEnum = false;
                 QType moduleType = null;
                 var ptype = Util.GetTypeRef(item.Type) as TypeDefinition;
-                if(ptype != null)
+                if (ptype != null)
                 {
-                    moduleType = module.FindType(ptype);
+                    moduleType = parent.module.FindType(ptype);
                     if (moduleType != null)
                         isEnum = moduleType.def.IsEnum;
                 }
 
+                p.name = name;
+                p.type = moduleType;
+                p.typeName = type;
+                p.isEnum = isEnum;
+                p.isPrimitive = isPrimitive;
 
-                if (!(isPrimitive || isEnum))
+                if (!p.isPrimitive)
                 {
-                    type = "const " + type + "&";
+                    if (p.type != null)
+                    {
+                        parent.includes.Add(p.type);
+                    }
+                    else
+                        parent.externalIncludes.Add(p.typeName);
                 }
+
                 var split = item.GetText().Split('=');
                 string optionValue = null;
                 if (split.Count() > 1)
                     optionValue = split[split.Count() - 1].Trim();
+
+                // special process
+                if (optionValue != null && name == "currencyId" && optionValue == "148")
+                    optionValue = "currencyId.USD";
+
+                if (optionValue != null)
+                {
+                    p.optionValue = optionValue;
+                }
+                parameters.Add(p);
+            }
+        }
+
+        public void postProgress()
+        {
+            processBody();
+            processParameters();
+        }
+
+        public void WriteParameters(TextFormatter f)
+        {
+            bool first = true;
+            f.Write("(");
+            foreach (var p in parameters)
+            {
+                string type;
+                if (!(p.isPrimitive || p.isEnum))
+                {
+                    type = "const " + p.typeName + "&";
+                }
+                else
+                    type = p.typeName;
+                
                 if (first)
                 {
                     first = false;
@@ -709,15 +934,24 @@ namespace QuantKit
                 else
                     f.Write(", ");
                 f.Write(type); f.Space();
-                f.Write(name);
-                if (optionValue != null && name == "currencyId" && optionValue == "148")
-                    optionValue = "currencyId.USD";
-                if (optionValue != null)
+                f.Write(p.name);
+
+                if (p.optionValue != null)
                 {
                     f.Write(" = ");
-                    f.Write(optionValue);
+                    f.Write(p.optionValue);
                 }
             }
+            f.Write(")");
+        }
+        void WritePublicBody(TextFormatter f)
+        {
+            f.WriteLine("{");
+            f.Indent();
+            foreach (var item in body)
+                f.WriteLine(item);
+            f.Unindent();
+            f.WriteLine("}");
         }
         public void GenerateHppCode(TextFormatter f)
         {
@@ -730,17 +964,20 @@ namespace QuantKit
                 f.Write(type);
                 f.Space();
                 f.Write(def.Name);
-                //f.Space();
-                f.Write("(");
-                WriteParameters(mdecl, parent.module, f);
-                f.WriteLine(");");
+                f.Space();
+                WriteParameters(f); 
+                f.WriteLine(";");
+                //WriteBody(f);
             }
             else // ctor
             {
+                if (parameters.Count() == 1)
+                    f.Write("explicit ");
                 f.Write(parent.def.Name);
-                f.Write("(");
-                WriteParameters(cdecl, parent.module, f);
-                f.WriteLine(");");
+                f.Space();
+                WriteParameters(f); 
+                f.WriteLine(";");
+                //WriteBody(f);
             }
         }
 
@@ -761,6 +998,9 @@ namespace QuantKit
         PropertyDeclaration pdecl = null;
         IndexerDeclaration idecl = null;
         public QType parent;
+
+        public List<MethodDefinition> GetBy = new List<MethodDefinition>();
+        public List<MethodDefinition> SetBy = new List<MethodDefinition>();
 
         public bool IsIndexer
         {
@@ -803,6 +1043,53 @@ namespace QuantKit
             GeneratePrivateCode(f);
         }
 
+        public static void WriteParameters(AstNode node, QModule module, TextFormatter f)
+        {
+            var plist = node.Descendants.OfType<ParameterDeclaration>().ToList();
+            bool first = true;
+            foreach (var item in plist)
+            {
+                bool isPrimitive;
+                string name = item.Name.Trim();
+                string type = Util.TypeToString(item.Type, out isPrimitive).Trim();
+
+                bool isEnum = false;
+                QType moduleType = null;
+                var ptype = Util.GetTypeRef(item.Type) as TypeDefinition;
+                if (ptype != null)
+                {
+                    moduleType = module.FindType(ptype);
+                    if (moduleType != null)
+                        isEnum = moduleType.def.IsEnum;
+                }
+
+
+                if (!(isPrimitive || isEnum))
+                {
+                    type = "const " + type + "&";
+                }
+                var split = item.GetText().Split('=');
+                string optionValue = null;
+                if (split.Count() > 1)
+                    optionValue = split[split.Count() - 1].Trim();
+                if (first)
+                {
+                    first = false;
+                }
+                else
+                    f.Write(", ");
+                f.Write(type); f.Space();
+                f.Write(name);
+                if (optionValue != null && name == "currencyId" && optionValue == "148")
+                    optionValue = "currencyId.USD";
+                if (optionValue != null)
+                {
+                    f.Write(" = ");
+                    f.Write(optionValue);
+                }
+            }
+        }
+
         public void GenerateHppCode(TextFormatter f)
         {
             if (IsIndexer)
@@ -814,7 +1101,7 @@ namespace QuantKit
                     string type = Util.TypeToString(idecl.ReturnType, out isPrimitive);
                     f.Write(type);
                     f.Write(" getItem"  + "(");
-                    QMethod.WriteParameters(idecl, parent.module, f);
+                    WriteParameters(idecl, parent.module, f);
                     f.WriteLine(");");
                 }
                 var setter = idecl.Setter;
@@ -825,7 +1112,7 @@ namespace QuantKit
                     if(!isPrimitive)
                         type = "const " +type +"& value";
                     f.Write("void setItem" + "(");
-                    QMethod.WriteParameters(idecl, parent.module, f);
+                    WriteParameters(idecl, parent.module, f);
                     f.WriteLine(");");
                 }          
             }
@@ -867,6 +1154,11 @@ namespace QuantKit
         public FieldDefinition def;
         public FieldDeclaration decl;
         public QType parent;
+        public List<MethodDefinition> ReadBy = new List<MethodDefinition>();
+        public List<MethodDefinition> WriteBy = new List<MethodDefinition>();
+
+        public string FieldName;
+
         public TypeReference FieldType
         {
             get
@@ -882,13 +1174,54 @@ namespace QuantKit
                 return def.Name;
             }
         }
+        public bool IsConst
+        {
+            get { return decl.HasModifier(Modifiers.Const); }
+        }
+        public bool IsPublic
+        {
+            get { return decl.HasModifier(Modifiers.Public); }
+        }
+        public bool IsInternal
+        {
+            get { return decl.HasModifier(Modifiers.Internal); }
+        }
+        public bool hasOptionValue
+        {
+            get { return decl.Descendants.OfType<VariableInitializer>().ToList().Count() > 0; }
+        }
+
+        public string optionValue
+        {
+            get
+            {
+                if (hasOptionValue)
+                {
+                    var ilist = decl.Descendants.OfType<VariableInitializer>().ToList();
+                        var ovalue = ilist[0];
+                        var s = ovalue.GetText();
+                        var slist = s.Split('=');
+                        //if (slist.Count() > 1)
+                        //{
+                            return slist[slist.Count() - 1];
+                        //}
+                        //else return "";
+                }
+                else return "";
+            }
+        }
         public QField(QType parent, FieldDefinition def, FieldDeclaration decl)
         {
             this.parent = parent;
             this.def = def;
             this.decl = decl;
+            this.FieldName = def.Name;
         }
 
+        public void Rename(string name)
+        {
+
+        }
         public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
@@ -901,11 +1234,17 @@ namespace QuantKit
         public void GenerateHppCode(TextFormatter f)
         {
             if (def.IsCompilerGenerated()) return;
-            if (decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal))
+            if (decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal) || decl.HasModifier(Modifiers.Const))
             {
+                if (decl.HasModifier(Modifiers.Const))
+                    f.Write("const ");
                 f.WriteType(FieldType);
                 f.Space();
                 f.Write(Name);
+                if(hasOptionValue){
+                    f.Write(" = ");
+                    f.Write(optionValue);
+                }
                 f.Write(";");
                 f.NewLine();
             }
@@ -1128,6 +1467,11 @@ namespace QuantKit
                 }
             }
 
+            if (result == "DateTime")
+            {
+                result = "QDateTime";
+            }
+
             return result;
         }
 
@@ -1233,12 +1577,12 @@ namespace QuantKit
             return null;
         }
 
-        private static MethodDefinition GetTypeConstructor(TypeDefinition type)
+        public static MethodDefinition GetTypeConstructor(TypeDefinition type)
         {
             return type.Methods.FirstOrDefault(method => method.Name == ".ctor");
         }
 
-        private static MethodDefinition FindMethodUsageInType(TypeDefinition type, MethodDefinition analyzedMethod)
+        public static MethodDefinition FindMethodUsageInType(TypeDefinition type, MethodDefinition analyzedMethod)
         {
             string name = analyzedMethod.Name;
             foreach (MethodDefinition method in type.Methods)
@@ -1265,8 +1609,77 @@ namespace QuantKit
             }
             return null;
         }
+        public static bool CanBeReadReference(Code code)
+        {
+            switch (code)
+            {
+                case Code.Ldfld:
+                case Code.Ldsfld:
+                    return true;
+                case Code.Stfld:
+                case Code.Stsfld:
+                    return false;
+                case Code.Ldflda:
+                case Code.Ldsflda:
+                    return true; // always show address-loading
+                default:
+                    return false;
+            }
+        }
+        public static bool CanBeAssignReference(Code code)
+        {
+            switch (code)
+            {
+                case Code.Ldfld:
+                case Code.Ldsfld:
+                    return false;
+                case Code.Stfld:
+                case Code.Stsfld:
+                    return true;
+                case Code.Ldflda:
+                case Code.Ldsflda:
+                    return true; // always show address-loading
+                default:
+                    return false;
+            }
+        }
+        public static MethodDefinition FindFieldUsageInType(TypeDefinition type, FieldDefinition analyzedField, bool ReadByOrAssignBy /*true is Read false is Assign*/)
+        {
+            string name = analyzedField.Name;
+            foreach (MethodDefinition method in type.Methods)
+            {
+                bool found = false;
+                if (!method.HasBody)
+                    continue;
+                foreach (Instruction instr in method.Body.Instructions)
+                {
+                    bool isAccessBy;
+                    if (ReadByOrAssignBy)
+                        isAccessBy = CanBeReadReference(instr.OpCode.Code);
+                    else
+                        isAccessBy = CanBeAssignReference(instr.OpCode.Code);
+                    if (isAccessBy)
+                    {
+                        FieldReference mr = instr.Operand as FieldReference;
+                        if (mr != null && mr.Name == name &&
+                            IsReferencedBy(analyzedField.DeclaringType, mr.DeclaringType) &&
+                            mr.Resolve() == analyzedField)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
 
-        private static MethodDefinition FindVariableOfTypeUsageInType(TypeDefinition type, TypeDefinition variableType)
+                method.Body = null;
+
+                if (found)
+                    return method;
+            }
+            return null;
+        }
+
+        public static MethodDefinition FindVariableOfTypeUsageInType(TypeDefinition type, TypeDefinition variableType)
         {
             foreach (MethodDefinition method in type.Methods)
             {
@@ -1298,76 +1711,6 @@ namespace QuantKit
                 td = tr.Resolve();
             return td;
         }
-
-        /*public static TypeReference GetTypeRef(AstNode expr)
-        {
-            var td = expr.Annotation<TypeDefinition>();
-            if (td != null)
-            {
-                return td;
-            }
-
-            var tr = expr.Annotation<TypeReference>();
-            if (tr != null)
-            {
-                return tr;
-            }
-
-            var ti = expr.Annotation<ICSharpCode.Decompiler.Ast.TypeInformation>();
-            if (ti != null)
-            {
-                return ti.InferredType;
-            }
-
-            var ilv = expr.Annotation<ICSharpCode.Decompiler.ILAst.ILVariable>();
-            if (ilv != null)
-            {
-                return ilv.Type;
-            }
-
-            var fr = expr.Annotation<FieldDefinition>();
-            if (fr != null)
-            {
-                return fr.FieldType;
-            }
-
-            var pr = expr.Annotation<PropertyDefinition>();
-            if (pr != null)
-            {
-                return pr.PropertyType;
-            }
-
-            var ie = expr as IndexerExpression;
-            if (ie != null)
-            {
-                var it = GetTypeRef(ie.Target);
-                if (it != null && it.IsArray)
-                {
-                    return it.GetElementType();
-                }
-            }
-
-            return null;
-        }
-
-        public static TypeReference GetTargetTypeRef(MemberReferenceExpression memberReferenceExpression)
-        {
-            var pd = memberReferenceExpression.Annotation<PropertyDefinition>();
-            if (pd != null)
-            {
-                return pd.DeclaringType;
-            }
-
-            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
-            if (fd == null)
-                fd = memberReferenceExpression.Annotation<FieldReference>() as FieldDefinition;
-            if (fd != null)
-            {
-                return fd.DeclaringType;
-            }
-
-            return GetTypeRef(memberReferenceExpression.Target);
-        }*/
 
         public static string GetClassName(AstNode expr)
         {
