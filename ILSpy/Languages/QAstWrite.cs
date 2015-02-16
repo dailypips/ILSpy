@@ -62,17 +62,17 @@ namespace QuantKit
 
         public void GenerateHppCode(QType type, ITextOutput output)
         {
-            type.GenerateHppCode(new TextFormatter(output));
+            //type.GenerateHppCode(new TextFormatter(output));
         }
 
         public void GenerateCppCode(QType type, ITextOutput output)
         {
-            type.GenerateCppCode(new TextFormatter(output));
+            //type.GenerateCppCode(new TextFormatter(output));
         }
 
         public void GeneratePrivateCode(QType type, ITextOutput output)
         {
-            type.GeneratePrivateCode(new TextFormatter(output));
+            //type.GeneratePrivateCode(new TextFormatter(output));
         }
 
         public void WriteProjectFile(string file)

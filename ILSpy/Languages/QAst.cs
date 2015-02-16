@@ -15,26 +15,27 @@ using System.Text;
 
 namespace QuantKit
 {
-    public interface GenerateCodeAbled
+    /*public interface GenerateCodeAbled
     {
         void GenerateCode(TextFormatter f);
         void GenerateHppCode(TextFormatter f);
         void GenerateCppCode(TextFormatter f);
         void GeneratePrivateCode(TextFormatter f);
-    }
+    }*/
 
-    public class QModule : GenerateCodeAbled
+    public class QModule 
     {
         public ModuleDefinition def;
         public List<QType> types = new List<QType>();
         public AstBuilder dom;
+        public CModule cmodule;
 
         public QModule(ModuleDefinition module, DecompilationOptions option)
         {
             def = module;
             dom = CreateAstBuilder(module, option);
             dom.AddAssembly(module.Assembly, onlyAssemblyLevel: false);
-
+            cmodule = new CModule(this);
             var mv = new QModuleVisitor(this);
             dom.SyntaxTree.AcceptVisitor(mv);
 
@@ -43,10 +44,8 @@ namespace QuantKit
                 var tv = new QTypeVisitor(t);
                 t.decl.AcceptVisitor(tv);
             }
-
-            PostProcess();
-
             dom.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
+            PostProcess();
         }
 
         public AstBuilder CreateAstBuilder(ModuleDefinition currentModule, DecompilationOptions options)
@@ -102,13 +101,26 @@ namespace QuantKit
             }
             return null;
         }
-
+        public QType FindType(string tname)
+        {
+            foreach(var item in types)
+            {
+                if (item.def.Name == tname)
+                    return item;
+            }
+            return null;
+        }
         public QMethod FindMethod(MethodDefinition m)
         {
             QType t = FindType(m.DeclaringType);
             return t.FindMethod(m);
         }
 
+        public CMethod FindCMethod(MethodDefinition m)
+        {
+            QType t = FindType(m.DeclaringType);
+            return t.FindCMethod(m);
+        }
         public QProperty FindProperty(PropertyDefinition p)
         {
             QType t = FindType(p.DeclaringType);
@@ -176,7 +188,7 @@ namespace QuantKit
 
             foreach (var t in types)
             {
-                t.preProcess();
+                t.GenerateSyntaxTree();
             }
 
             foreach(var t in types)
@@ -185,7 +197,7 @@ namespace QuantKit
             }
         }
 
-        public void GenerateCode(TextFormatter f)
+        /*public void GenerateCode(TextFormatter f)
         {
             f.WriteLine("---Hpp---");
             GenerateHppCode(f);
@@ -208,11 +220,12 @@ namespace QuantKit
         public void GeneratePrivateCode(TextFormatter f)
         {
 
-        }
+        }*/
     }
 
+    
 
-    public class QType : GenerateCodeAbled
+    public class QType
     {
         public TypeDefinition def;
         TypeDeclaration tdecl = null;
@@ -235,13 +248,55 @@ namespace QuantKit
         public HashSet<QType> includes = new HashSet<QType>();
         public HashSet<string> externalIncludes = new HashSet<string>();
 
+        //public List<CField> cfields = new List<CField>();
+        //public List<CMethod> cmethods = new List<CMethod>();
+
+        public CEntiry syntaxNode;
+
+        void processEnumMerber()
+        {
+            var mlist = tdecl.Descendants.OfType<EnumMemberDeclaration>().ToList();
+            var cenum = syntaxNode as CEnum;
+            foreach(var item in mlist)
+            {
+                var m = new CEnumMember();
+                var text = item.GetText();
+                var split = text.Split('=');
+                m.name = split[0];
+                if (split.Count() >= 2)
+                    m.optionValue = split[1];
+                cenum.members.Add(m);
+            }
+        }
+
+        void processCEntity()
+        {
+            syntaxNode.name = def.Name;
+            syntaxNode.origin = this;
+            syntaxNode.ns = def.Namespace;
+        }
 
         public QType(QModule parent, TypeDefinition def, TypeDeclaration decl)
         {
             module = parent;
             this.def = def;
             tdecl = decl;
+            if (def.IsEnum)
+            {
+                syntaxNode = new CEnum(parent.cmodule);
+                processEnumMerber();
+            }
+            else if(def.IsInterface)
+            {
+                syntaxNode = new CClass(parent.cmodule){isInterface = true};
+            }
+            else
+            {
+                syntaxNode = new CClass(parent.cmodule);
+            }
+            processCEntity();
         }
+
         public QType(QModule parent, TypeDefinition def, DelegateDeclaration decl)
         {
             module = parent;
@@ -296,7 +351,71 @@ namespace QuantKit
 
             return null;
         }
+        public QProperty FindPropertyMethod(MethodDefinition def, bool getter)
+        {
+            foreach (var item in properties)
+            {
+                MethodDefinition pmethod;
+                if (getter)
+                    pmethod = item.def.GetMethod;
+                else
+                    pmethod = item.def.SetMethod;
 
+                if (pmethod == def)
+                {
+                    return item;
+                }
+            }
+
+            foreach(var item in indexers)
+            {
+                MethodDefinition pmethod;
+                if (getter)
+                    pmethod = item.def.GetMethod;
+                else
+                    pmethod = item.def.SetMethod;
+
+                if (pmethod == def)
+                {
+                    return item;
+                }
+            }
+            return null;
+        }
+
+        public CMethod FindCMethod(MethodDefinition def)
+        {
+            var m = FindMethod(def);
+            if (m != null)
+            {
+                if (m.syntaxNode == null)
+                    Console.WriteLine("Error");
+                return m.syntaxNode;
+            }
+            if (def.IsGetter)
+            {
+                var p = FindPropertyMethod(def, true);
+                if (p != null)
+                {
+                    if (p.syntaxGetterNode == null)
+                        Console.WriteLine("Error");
+                    else
+                        return p.syntaxGetterNode;
+                }
+            }
+            if (def.IsSetter)
+            {
+                var p = FindPropertyMethod(def, false);
+                if (p != null)
+                {
+                    if (p.syntaxSetterNode == null)
+                        Console.WriteLine("Error");
+                    else
+                        return p.syntaxSetterNode;
+                }
+            }
+            return null;
+        }
         public QMethod FindMethod(MethodDeclaration decl)
         {
             foreach (var item in methods)
@@ -446,20 +565,8 @@ namespace QuantKit
             var m = new QProperty(this, def, decl);
             AddIndexer(m);
         }
-
-        public void preProcess()
+        public void FindUsage()
         {
-            // process methods
-            foreach (var m in methods)
-            {
-                m.postProgress();
-            }
-
-            foreach (var c in ctors)
-            {
-                c.postProgress();
-            }
-
             // find field readby
             foreach (var f in fields)
             {
@@ -467,7 +574,7 @@ namespace QuantKit
                 {
                     var method = Util.FindFieldUsageInType(ft.def, f.def, true);
                     if (method != null)
-                        f.ReadBy.Add(method);
+                        f.AddReadBy(method);
                 }
             }
 
@@ -478,7 +585,7 @@ namespace QuantKit
                 {
                     var method = Util.FindFieldUsageInType(ft.def, f.def, false);
                     if (method != null)
-                        f.WriteBy.Add(method);
+                        f.AddAssignBy(method);
                 }
             }
             // find Property ReadBy
@@ -491,7 +598,7 @@ namespace QuantKit
                 {
                     var method = Util.FindMethodUsageInType(ft.def, getter);
                     if (method != null)
-                        p.GetBy.Add(method);
+                        p.AddGetBy(method);
                 }
             }
             // find Property Write
@@ -504,27 +611,71 @@ namespace QuantKit
                 {
                     var method = Util.FindMethodUsageInType(ft.def, setter);
                     if (method != null)
-                        p.SetBy.Add(method);
+                        p.AddSetBy(method);
                 }
             }
+        }
 
+        public void GenerateSyntaxTree()
+        {
+            // process syntax tree
+            foreach (var m in methods)
+            {
+                m.GeneratorSyntaxTree(syntaxNode);
+            }
+
+            foreach (var c in ctors)
+            {
+                c.GeneratorSyntaxTree(syntaxNode);
+            }
+
+            foreach(var f in fields)
+            {
+                f.GenerateSyntaxTree();
+            }
+            foreach(var f in constFields)
+            {
+                f.GenerateSyntaxTree();
+            }
+            foreach (var p in properties)
+            {
+                p.GenerateSyntaxTree(syntaxNode);
+            }
+            foreach(var p in indexers)
+            {
+                p.GenerateSyntaxTree(syntaxNode);
+            }
         }
 
         void FieldRename()
         {
+            foreach (var f in fields)
+            {
+                if (f.ReadBy.Count() > 0)
+                {
 
+                }
+            }
         }
         void PropertyRename()
         {
 
         }
+        void Field2Method()
+        {
+
+        }
         public void postProcess()
         {
+            FindUsage();
+            foreach (var f in fields)
+                f.syntaxNode.Rename();
             FieldRename();
+            Field2Method();
             PropertyRename();
         }
 
-        public void GenerateCode(TextFormatter f)
+        /*public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
             f.WriteLine();
@@ -679,6 +830,8 @@ namespace QuantKit
         void WriteHppNameSpace(TextFormatter f)
         {
             string nspace = def.Namespace;
+            if(nspace!=null)
+                nspace = nspace.Replace("SmartQuant", "QuantKit");
             bool hasNamespace = nspace != null && nspace != "";
             if (hasNamespace)
             {
@@ -745,40 +898,40 @@ namespace QuantKit
         {
             if(def.IsEnum || def.IsInterface)
                 return;
-        }
+        }*/
     }
 
-    public class QParameter
+    /*public class QParameter
     {
         public QType type;
         public string typeName;
         public string externalType;
         public string name;
         public string optionValue;
-        public QMethod parent;
+        public object parent;
         public bool isPrimitive = false;
         public bool isEnum = false;
         //public bool isCtor = false;
-        public QParameter(QMethod method)
+        public QParameter(object obj)
         {
-            this.parent = method;
+            this.parent = obj;
         }
-    }
+    }*/
 
-    public class QMethod : GenerateCodeAbled
+    public class QMethod
     {
         public MethodDefinition def;
         MethodDeclaration mdecl = null;
         ConstructorDeclaration cdecl = null;
         public QType parent;
-        public List<QParameter> parameters = new List<QParameter>();
-        public List<string> body = new List<string>();
-
+        public CMethod syntaxNode;
+        //public List<QParameter> parameters = new List<QParameter>();
+        //public List<string> body = new List<string>();
         public bool IsConstructor
         {
             get
             {
-                return def.IsConstructor;
+                return def != null && def.IsConstructor;
             }
         }
         public AstNode decl
@@ -804,53 +957,13 @@ namespace QuantKit
             cdecl = methoddecl;
         }
 
-        public void GenerateCode(TextFormatter f)
+        /*public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
             f.WriteLine();
             GenerateCppCode(f);
             f.WriteLine();
             GeneratePrivateCode(f);
-        }
-
-        void processBody()
-        {
-            var csharpText = new StringWriter();
-            var csharpoutput = new PlainTextOutput(csharpText);
-            var outputFormatter = new TextOutputFormatter(csharpoutput) { FoldBraces = true };
-            decl.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, FormattingOptionsFactory.CreateAllman()));
-            var blist = decl.Descendants.OfType<BlockStatement>().ToList();
-
-            string b = csharpText.ToString();
-            var bb = b.Replace("\r\n", "\n");
-            var bodylist = bb.Split('\n');
-            var tlist = new List<string>();
-            foreach (var item in bodylist)
-            {
-                var stat = item.Trim();
-                tlist.Add(stat);
-            }
-            tlist.RemoveAt(0); // delete method define
-            if (tlist.Count() > 0)
-            {
-                if (tlist[0] == "{")
-                    tlist.RemoveAt(0);
-
-                while (tlist.Count() > 0)
-                {
-                    if (tlist[tlist.Count() - 1] == "")
-                        tlist.RemoveAt(tlist.Count() - 1);
-                    else
-                        break;
-                }
-
-                if (tlist.Count() > 0)
-                {
-                    if (tlist[tlist.Count() - 1] == "}")
-                        tlist.RemoveAt(tlist.Count() - 1);
-                }
-            }
-            body = tlist;
         }
 
         void processParameters()
@@ -863,6 +976,7 @@ namespace QuantKit
                 bool isPrimitive;
                 string name = item.Name.Trim();
                 string type = Util.TypeToString(item.Type, out isPrimitive).Trim();
+                type = type.Replace("[]", "");
 
                 bool isEnum = false;
                 QType moduleType = null;
@@ -873,7 +987,10 @@ namespace QuantKit
                     if (moduleType != null)
                         isEnum = moduleType.def.IsEnum;
                 }
-
+                if (moduleType == null)
+                {
+                    moduleType = parent.module.FindType(type);
+                }
                 p.name = name;
                 p.type = moduleType;
                 p.typeName = type;
@@ -887,7 +1004,9 @@ namespace QuantKit
                         parent.includes.Add(p.type);
                     }
                     else
+                    {
                         parent.externalIncludes.Add(p.typeName);
+                    }
                 }
 
                 var split = item.GetText().Split('=');
@@ -905,15 +1024,44 @@ namespace QuantKit
                 }
                 parameters.Add(p);
             }
-        }
+        }*/
 
-        public void postProgress()
+        /*public void processCMethod(CClass obj)
         {
-            processBody();
-            processParameters();
+            var m = new CMethod(obj);
+            m.origin = this;
+            m.name = def.Name;
+            m.rtype = Util.Type2CType(parent.module, def.ReturnType);
+            m.isPrivate = def.IsPrivate;
+            m.isPublic = def.IsPublic;
+            m.isAbstract = def.IsAbstract;
+            m.isVirtual = def.IsVirtual;
+            m.isStatic = def.IsStatic;
+            m.isCtor = def.IsConstructor;
+            Util.processMethodBody(m.body, decl);
+            Util.processParameters(parent.module, decl, m.parameters);
+            //parent.cmethods.Add(m);
+        }*/
+
+        public void GeneratorSyntaxTree(CEntiry entity)
+        {
+            var obj = entity as CClass;
+            var cm = new CMethod(obj);
+            cm.origin = this;
+            cm.name = def.Name;
+            cm.rtype = Util.Type2CType(parent.module, def.ReturnType);
+            cm.isPrivate = def.IsPrivate;
+            cm.isPublic = def.IsPublic;
+            cm.isAbstract = def.IsAbstract;
+            cm.isVirtual = def.IsVirtual;
+            cm.isStatic = def.IsStatic;
+            cm.isCtor = def.IsConstructor;
+            Util.processMethodBody(cm.body, decl);
+            Util.processParameters(parent.module, decl, cm.parameters);
+            syntaxNode = cm;
         }
 
-        public void WriteParameters(TextFormatter f)
+        /*public void WriteParameters(TextFormatter f)
         {
             bool first = true;
             f.Write("(");
@@ -989,10 +1137,10 @@ namespace QuantKit
         public void GeneratePrivateCode(TextFormatter f)
         {
 
-        }
+        }*/
     }
 
-    public class QProperty : GenerateCodeAbled
+    public class QProperty 
     {
         public PropertyDefinition def;
         PropertyDeclaration pdecl = null;
@@ -1002,13 +1150,19 @@ namespace QuantKit
         public List<MethodDefinition> GetBy = new List<MethodDefinition>();
         public List<MethodDefinition> SetBy = new List<MethodDefinition>();
 
-        public bool IsIndexer
+        public List<CMethod> ModuleGetBy = new List<CMethod>();
+        public List<CMethod> ModuleSetBy = new List<CMethod>();
+
+        public CMethod syntaxGetterNode;
+        public CMethod syntaxSetterNode;
+
+        /*public bool IsIndexer
         {
             get
             {
                 return def.IsIndexer();
             }
-        }
+        }*/
 
         public AstNode decl
         {
@@ -1034,7 +1188,195 @@ namespace QuantKit
             this.idecl = decl;
         }
 
-        public void GenerateCode(TextFormatter f)
+        /*void processIndexerParameters(List<CParameter> parameters)
+        {
+            var plist = decl.Descendants.OfType<ParameterDeclaration>().ToList();
+            foreach (var item in plist)
+            {
+                var p = new CParameter();
+
+                p.name = item.Name.Trim(); ;
+                p.type = Util.Type2CType(parent.module, item.Type);
+
+                var split = item.GetText().Split('=');
+                string optionValue = null;
+                if (split.Count() > 1)
+                    optionValue = split[split.Count() - 1].Trim();
+
+                // special process
+                if (optionValue != null && p.name == "currencyId" && optionValue == "148")
+                    optionValue = "currencyId.USD";
+
+                if (optionValue != null)
+                {
+                    p.optionValue = optionValue;
+                }
+                parameters.Add(p);
+            }
+        }
+        void processPropertyBody(List<string> body, AstNode node)
+        {
+            var csharpText = new StringWriter();
+            var csharpoutput = new PlainTextOutput(csharpText);
+            var outputFormatter = new TextOutputFormatter(csharpoutput) { FoldBraces = true };
+            decl.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, FormattingOptionsFactory.CreateAllman()));
+            var blist = node.Descendants.OfType<BlockStatement>().ToList();
+
+            string b = csharpText.ToString();
+            var bb = b.Replace("\r\n", "\n");
+            var bodylist = bb.Split('\n');
+            var tlist = new List<string>();
+            foreach (var item in bodylist)
+            {
+                var stat = item.Trim();
+                tlist.Add(stat);
+            }
+            tlist.RemoveAt(0); // delete method define
+            if (tlist.Count() > 0)
+            {
+                if (tlist[0] == "{")
+                    tlist.RemoveAt(0);
+
+                while (tlist.Count() > 0)
+                {
+                    if (tlist[tlist.Count() - 1] == "")
+                        tlist.RemoveAt(tlist.Count() - 1);
+                    else
+                        break;
+                }
+
+                if (tlist.Count() > 0)
+                {
+                    if (tlist[tlist.Count() - 1] == "}")
+                        tlist.RemoveAt(tlist.Count() - 1);
+                }
+            }
+            foreach (var s in tlist)
+                body.Add(s);
+        }*/
+
+        public void AddGetBy(MethodDefinition def)
+        {
+            CMethod method = parent.module.FindCMethod(def);
+            if (method != null)
+            {
+                ModuleGetBy.Add(method);
+            }
+            else
+                GetBy.Add(def);
+        }
+        public void AddSetBy(MethodDefinition def)
+        {
+            CMethod method = parent.module.FindCMethod(def);
+            if (method != null)
+            {
+                ModuleSetBy.Add(method);
+            }
+            else
+                SetBy.Add(def);
+        }
+        public void GenerateSyntaxTree(CEntiry obj)
+        {
+            var p = obj as CClass;
+            if (def.IsIndexer())
+            {
+                var getter = idecl.Getter;
+                if (!getter.IsNull)// && !getter.HasModifier(Modifiers.Private))
+                {
+                    var cm = new CMethod(p);
+                    cm.origin = this;
+                    cm.name = "getItem";
+                    cm.rtype = Util.Type2CType(parent.module, idecl.ReturnType);
+                    Util.processParameters(parent.module, decl, cm.parameters);
+                    Util.processMethodBody(cm.body, getter);
+                    cm.isPrivate = getter.HasModifier(Modifiers.Private);
+                    cm.isInternal = getter.HasModifier(Modifiers.Internal);
+                    cm.isPublic = getter.HasModifier(Modifiers.Public);
+                    cm.isProtected = getter.HasModifier(Modifiers.Protected);
+                    cm.isAbstract = getter.HasModifier(Modifiers.Abstract);
+                    cm.isVirtual = getter.HasModifier(Modifiers.Virtual);
+                    cm.isOverride = getter.HasModifier(Modifiers.Override);
+                    cm.isStatic = getter.HasModifier(Modifiers.Static);
+                    cm.isGetter = true;
+                    syntaxGetterNode = cm;
+                    //parent.cmethods.Add(cm);
+                }
+
+                var setter = idecl.Setter;
+                if (!setter.IsNull)// && !setter.HasModifier(Modifiers.Private))
+                {
+                    var cm = new CMethod(p);
+                    cm.origin = this;
+                    cm.name = "setItem";
+                    cm.rtype = Util.Type2CType(parent.module, idecl.ReturnType);
+                    Util.processParameters(parent.module, decl, cm.parameters);
+                    Util.processMethodBody(cm.body, setter);
+                    cm.isPrivate = setter.HasModifier(Modifiers.Private);
+                    cm.isInternal = setter.HasModifier(Modifiers.Internal);
+                    cm.isPublic = setter.HasModifier(Modifiers.Public);
+                    cm.isProtected = setter.HasModifier(Modifiers.Protected);
+                    cm.isAbstract = setter.HasModifier(Modifiers.Abstract);
+                    cm.isVirtual = setter.HasModifier(Modifiers.Virtual);
+                    cm.isOverride = setter.HasModifier(Modifiers.Override);
+                    cm.isStatic = setter.HasModifier(Modifiers.Static);
+                    cm.isSetter = true;
+                    syntaxSetterNode = cm;
+                    //parent.cmethods.Add(cm);
+                }
+            }
+            else
+            {
+                var getter = pdecl.Getter;
+                if (!getter.IsNull)// && !getter.HasModifier(Modifiers.Private) && !pdecl.HasModifier(Modifiers.Override))
+                {
+                    var cm = new CMethod(p);
+                    cm.origin = this;
+                    cm.name = "get"+def.Name;
+                    cm.rtype = Util.Type2CType(parent.module, pdecl.ReturnType);
+                    Util.processMethodBody(cm.body, getter);
+                    cm.isPrivate = getter.HasModifier(Modifiers.Private);
+                    cm.isInternal = getter.HasModifier(Modifiers.Internal);
+                    cm.isPublic = getter.HasModifier(Modifiers.Public);
+                    cm.isProtected = getter.HasModifier(Modifiers.Protected);
+                    cm.isAbstract = getter.HasModifier(Modifiers.Abstract);
+                    cm.isVirtual = getter.HasModifier(Modifiers.Virtual);
+                    cm.isOverride = getter.HasModifier(Modifiers.Override);
+                    cm.isStatic = getter.HasModifier(Modifiers.Static);
+                    cm.isGetter = true;
+                    syntaxGetterNode = cm;
+                    //parent.cmethods.Add(cm);
+                }
+
+                var setter = pdecl.Setter;
+                if (!setter.IsNull)// && !setter.HasModifier(Modifiers.Private) && !pdecl.HasModifier(Modifiers.Override))
+                {
+                    var cm = new CMethod(p);
+                    cm.origin = this;
+                    cm.name = "set" + def.Name;
+                    var rtype = new CType();
+                    rtype.name = "void";
+                    rtype.isVoid = true;
+                    cm.rtype = rtype;
+                    var param = new CParameter();
+                    param.type = Util.Type2CType(parent.module, pdecl.ReturnType);
+                    param.name = "value";
+                    cm.parameters.Add(param);
+                    Util.processMethodBody(cm.body, setter);
+                    cm.isPrivate = setter.HasModifier(Modifiers.Private);
+                    cm.isInternal = setter.HasModifier(Modifiers.Internal);
+                    cm.isPublic = setter.HasModifier(Modifiers.Public);
+                    cm.isProtected = setter.HasModifier(Modifiers.Protected);
+                    cm.isAbstract = setter.HasModifier(Modifiers.Abstract);
+                    cm.isVirtual = setter.HasModifier(Modifiers.Virtual);
+                    cm.isOverride = setter.HasModifier(Modifiers.Override);
+                    cm.isStatic = setter.HasModifier(Modifiers.Static);
+                    cm.isSetter = true;
+                    syntaxSetterNode = cm;
+                    //parent.cmethods.Add(cm);
+                }
+            }
+        }
+        /*public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
             f.WriteLine();
@@ -1146,20 +1488,23 @@ namespace QuantKit
         public void GeneratePrivateCode(TextFormatter f)
         {
 
-        }
+        }*/
     }
 
-    public class QField : GenerateCodeAbled
+    public class QField
     {
         public FieldDefinition def;
         public FieldDeclaration decl;
         public QType parent;
         public List<MethodDefinition> ReadBy = new List<MethodDefinition>();
         public List<MethodDefinition> WriteBy = new List<MethodDefinition>();
+        public List<CMethod> ModuleReadBy = new List<CMethod>();
+        public List<CMethod> ModuleWriteBy = new List<CMethod>();
 
-        public string FieldName;
+        public CField syntaxNode;
+        //public string FieldName;
 
-        public TypeReference FieldType
+        /*public TypeReference FieldType
         {
             get
             {
@@ -1209,20 +1554,80 @@ namespace QuantKit
                 }
                 else return "";
             }
+        }*/
+        public void AddReadBy(MethodDefinition mdef)
+        {
+            CMethod method = parent.module.FindCMethod(mdef);
+            if (method != null)
+            {
+                ModuleReadBy.Add(method);
+                // make filed read as method
+                var p = parent.syntaxNode as CClass;
+                var m = new CMethod(p);
+                m.origin = this;
+                m.name = "get" + def.Name;
+                m.rtype = Util.Type2CType(parent.module, def.FieldType);
+                m.isPublic = true;
+                m.isFieldGetter = true;
+                syntaxNode.ReadBy.Add(method);
+                syntaxNode.Getter = m;
+                // rename ref body
+            }
+            else
+                ReadBy.Add(mdef);
         }
+
+        public void AddAssignBy(MethodDefinition mdef)
+        {
+            CMethod method = parent.module.FindCMethod(mdef);
+            if (method != null)
+            {
+                ModuleWriteBy.Add(method);
+                // make field assign as method
+                var p = parent.syntaxNode as CClass;
+                var m = new CMethod(p);
+                m.origin = this;
+                m.name = "set" + def.Name;
+                m.rtype = new CType();
+                m.rtype.name = "void";
+                m.rtype.isVoid = true;
+                var mparam = new CParameter();
+                mparam.type = Util.Type2CType(parent.module, def.FieldType);
+                mparam.name = "value";
+                m.parameters.Add(mparam);
+                m.isPublic = true;
+                m.isFieldSetter = true;
+                syntaxNode.AssignBy.Add(method);
+                syntaxNode.Setter = m;
+                // rename ref body
+            }
+            else
+                WriteBy.Add(mdef);
+        }
+        public void GenerateSyntaxTree()
+        {
+            var p = parent.syntaxNode as CClass;
+            syntaxNode = new CField(p);
+            syntaxNode.origin = this;
+            syntaxNode.name = def.Name;
+            syntaxNode.type = Util.Type2CType(parent.module, def.FieldType);
+            syntaxNode.optionValue = Util.OptionValue(decl);
+            syntaxNode.isCompilerGenerated = def.IsCompilerGenerated();
+            syntaxNode.isPublic = decl.HasModifier(Modifiers.Public);
+            syntaxNode.isInternal = decl.HasModifier(Modifiers.Internal);
+            syntaxNode.isConst = decl.HasModifier(Modifiers.Const);
+            //parent.cfields.Add(node);
+        }
+
         public QField(QType parent, FieldDefinition def, FieldDeclaration decl)
         {
             this.parent = parent;
             this.def = def;
             this.decl = decl;
-            this.FieldName = def.Name;
+            //this.FieldName = def.Name;
         }
 
-        public void Rename(string name)
-        {
-
-        }
-        public void GenerateCode(TextFormatter f)
+        /*public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
             f.WriteLine();
@@ -1233,15 +1638,16 @@ namespace QuantKit
 
         public void GenerateHppCode(TextFormatter f)
         {
-            if (def.IsCompilerGenerated()) return;
-            if (decl.HasModifier(Modifiers.Public) || decl.HasModifier(Modifiers.Internal) || decl.HasModifier(Modifiers.Const))
+            if (node.isCompilerGenerated) return;
+            if (node.isPublic || node.isInternal || node.isConst)
             {
-                if (decl.HasModifier(Modifiers.Const))
+                if (node.isConst)
                     f.Write("const ");
-                f.WriteType(FieldType);
+                f.Write(node.type.name);
                 f.Space();
-                f.Write(Name);
-                if(hasOptionValue){
+                f.Write(node.name);
+                if (node.optionValue != "")
+                {
                     f.Write(" = ");
                     f.Write(optionValue);
                 }
@@ -1265,10 +1671,10 @@ namespace QuantKit
                 f.Write(";");
                 f.NewLine();
             }
-        }
+        }*/
     }
 
-    public class QEvent : GenerateCodeAbled
+    public class QEvent
     {
         public EventDefinition def;
         public EventDeclaration decl;
@@ -1280,7 +1686,7 @@ namespace QuantKit
             this.decl = decl;
         }
 
-        public void GenerateCode(TextFormatter f)
+        /*public void GenerateCode(TextFormatter f)
         {
             GenerateHppCode(f);
             f.WriteLine();
@@ -1304,992 +1710,8 @@ namespace QuantKit
         public void GeneratePrivateCode(TextFormatter f)
         {
            // output.WriteLine(FieldType.Name + " " + Name + ";");
-        }
-    }
-
-    #region Util
-    class Util
-    {
-        public static TypeReference GetTypeRef(AstNode expr)
-        {
-            var td = expr.Annotation<TypeDefinition>();
-            if (td != null)
-            {
-                return td;
-            }
-
-            var tr = expr.Annotation<TypeReference>();
-            if (tr != null)
-            {
-                return tr;
-            }
-
-            var ti = expr.Annotation<ICSharpCode.Decompiler.Ast.TypeInformation>();
-            if (ti != null)
-            {
-                return ti.InferredType;
-            }
-
-            var ilv = expr.Annotation<ICSharpCode.Decompiler.ILAst.ILVariable>();
-            if (ilv != null)
-            {
-                return ilv.Type;
-            }
-
-            var fr = expr.Annotation<FieldDefinition>();
-            if (fr != null)
-            {
-                return fr.FieldType;
-            }
-
-            var pr = expr.Annotation<PropertyDefinition>();
-            if (pr != null)
-            {
-                return pr.PropertyType;
-            }
-
-            var ie = expr as IndexerExpression;
-            if (ie != null)
-            {
-                var it = GetTypeRef(ie.Target);
-                if (it != null && it.IsArray)
-                {
-                    return it.GetElementType();
-                }
-            }
-
-            return null;
-        }
-
-        public static TypeReference GetTargetTypeRef(MemberReferenceExpression memberReferenceExpression)
-        {
-            var pd = memberReferenceExpression.Annotation<PropertyDefinition>();
-            if (pd != null)
-            {
-                return pd.DeclaringType;
-            }
-
-            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
-            if (fd == null)
-                fd = memberReferenceExpression.Annotation<FieldReference>() as FieldDefinition;
-            if (fd != null)
-            {
-                return fd.DeclaringType;
-            }
-
-            return GetTypeRef(memberReferenceExpression.Target);
-        }
-        public static string TypeToString(TypeReference type, out bool isPrimitiveType)
-        {
-            string result = type.Name;
-            isPrimitiveType = false;
-            if(type.IsPrimitive)
-            {
-                isPrimitiveType = true;
-                switch (result)
-                {
-                    case "SByte":
-                        result = "char";
-                        break;
-                    case "Byte":
-                        result = "unsigned char";
-                        break;
-                    case "Boolean":
-                        result = "bool";
-                        break;
-                    case "Int16":
-                        result = "short";
-                        break;
-                    case "UInt16":
-                        result = "unsigned short";
-                        break;
-                    case "Int32":
-                        result = "int";
-                        break;
-                    case "UInt32":
-                        result = "unsigned int";
-                        break;
-                    case "Int64":
-                        result = "long";
-                        break;
-                    case "UInt64":
-                        result = "unsigned long";
-                        break;
-                    case "Single":
-                    case "Double":
-                        result = "double";
-                        break;
-                    case "Char":
-                        result = "char";
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            if (result == "String")
-                result = "QString";
-            else if (result == "DateTime")
-                result = "QDateTime";
-            else if (result == "Void")
-                result = "void";
-
-            return result;
-        }
-        public static string TypeToString(AstType type, out bool isPrimitiveType)
-        {
-            string result = type.GetText();
-            isPrimitiveType = false;
-            PrimitiveType pType = type as PrimitiveType;
-            if (pType != null)
-            {
-                isPrimitiveType = true;
-                var code = pType.KnownTypeCode;
-                switch (code)
-                {
-                    case KnownTypeCode.SByte:
-                        result = "char";
-                        break;
-                    case KnownTypeCode.Byte:
-                        result = "unsigned char";
-                        break;
-                    case KnownTypeCode.String:
-                        result = "QString";
-                        isPrimitiveType = false;
-                        break;
-                    case KnownTypeCode.DateTime:
-                        result = "QDateTime";
-                        isPrimitiveType = false;
-                        break;
-                    default:
-                        result = type.GetText();
-                        break;
-                }
-            }
-
-            if (result == "DateTime")
-            {
-                result = "QDateTime";
-            }
-
-            return result;
-        }
-
-        public static string TypeToString(TypeReference type, ICustomAttributeProvider typeAttributes = null)
-        {
-            if (type == null)
-                return "NULL TYPE";
-
-            ConvertTypeOptions options = ConvertTypeOptions.IncludeTypeParameterDefinitions;// | ConvertTypeOptions.IncludeNamespace;
-
-            AstType astType = AstBuilder.ConvertType(type, typeAttributes, options);
-
-            StringWriter w = new StringWriter();
-            if (type.IsByReference)
-            {
-                ParameterDefinition pd = typeAttributes as ParameterDefinition;
-                if (pd != null && (!pd.IsIn && pd.IsOut))
-                    w.Write("out ");
-                else
-                    w.Write("ref ");
-
-                if (astType is ComposedType && ((ComposedType)astType).PointerRank > 0)
-                    ((ComposedType)astType).PointerRank--;
-            }
-
-            astType.AcceptVisitor(new CSharpOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
-            return w.ToString();
-        }
-
-        public static string GetTargetTypeString(MemberReferenceExpression memberReferenceExpression)
-        {
-            TypeReference reference = GetTargetTypeRef(memberReferenceExpression);
-            return TypeToString(reference);
-        }
-
-        public static bool IsReferencedBy(TypeDefinition type, TypeReference typeRef)
-        {
-            // TODO: move it to a better place after adding support for more cases.
-            if (type == null)
-                throw new ArgumentNullException("type");
-            if (typeRef == null)
-                throw new ArgumentNullException("typeRef");
-
-            if (type == typeRef)
-                return true;
-            if (type.Name != typeRef.Name)
-                return false;
-            if (type.Namespace != typeRef.Namespace)
-                return false;
-
-            if (type.DeclaringType != null || typeRef.DeclaringType != null)
-            {
-                if (type.DeclaringType == null || typeRef.DeclaringType == null)
-                    return false;
-                if (!IsReferencedBy(type.DeclaringType, typeRef.DeclaringType))
-                    return false;
-            }
-
-            return true;
-        }
-
-        public static MemberReference GetOriginalCodeLocation(MemberReference member)
-        {
-            if (member is MethodDefinition)
-                return GetOriginalCodeLocation((MethodDefinition)member);
-            return member;
-        }
-
-        public static MethodDefinition GetOriginalCodeLocation(MethodDefinition method)
-        {
-            if (method.IsCompilerGenerated())
-            {
-                return FindMethodUsageInType(method.DeclaringType, method) ?? method;
-            }
-
-            var typeUsage = GetOriginalCodeLocation(method.DeclaringType);
-
-            return typeUsage ?? method;
-        }
-
-        /// <summary>
-        /// Given a compiler-generated type, returns the method where that type is used.
-        /// Used to detect the 'parent method' for a lambda/iterator/async state machine.
-        /// </summary>
-        public static MethodDefinition GetOriginalCodeLocation(TypeDefinition type)
-        {
-            if (type != null && type.DeclaringType != null && type.IsCompilerGenerated())
-            {
-                if (type.IsValueType)
-                {
-                    // Value types might not have any constructor; but they must be stored in a local var
-                    // because 'initobj' (or 'call .ctor') expects a managed ref.
-                    return FindVariableOfTypeUsageInType(type.DeclaringType, type);
-                }
-                else
-                {
-                    MethodDefinition constructor = GetTypeConstructor(type);
-                    if (constructor == null)
-                        return null;
-                    return FindMethodUsageInType(type.DeclaringType, constructor);
-                }
-            }
-            return null;
-        }
-
-        public static MethodDefinition GetTypeConstructor(TypeDefinition type)
-        {
-            return type.Methods.FirstOrDefault(method => method.Name == ".ctor");
-        }
-
-        public static MethodDefinition FindMethodUsageInType(TypeDefinition type, MethodDefinition analyzedMethod)
-        {
-            string name = analyzedMethod.Name;
-            foreach (MethodDefinition method in type.Methods)
-            {
-                bool found = false;
-                if (!method.HasBody)
-                    continue;
-                foreach (Instruction instr in method.Body.Instructions)
-                {
-                    MethodReference mr = instr.Operand as MethodReference;
-                    if (mr != null && mr.Name == name &&
-                        IsReferencedBy(analyzedMethod.DeclaringType, mr.DeclaringType) &&
-                        mr.Resolve() == analyzedMethod)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-
-                method.Body = null;
-
-                if (found)
-                    return method;
-            }
-            return null;
-        }
-        public static bool CanBeReadReference(Code code)
-        {
-            switch (code)
-            {
-                case Code.Ldfld:
-                case Code.Ldsfld:
-                    return true;
-                case Code.Stfld:
-                case Code.Stsfld:
-                    return false;
-                case Code.Ldflda:
-                case Code.Ldsflda:
-                    return true; // always show address-loading
-                default:
-                    return false;
-            }
-        }
-        public static bool CanBeAssignReference(Code code)
-        {
-            switch (code)
-            {
-                case Code.Ldfld:
-                case Code.Ldsfld:
-                    return false;
-                case Code.Stfld:
-                case Code.Stsfld:
-                    return true;
-                case Code.Ldflda:
-                case Code.Ldsflda:
-                    return true; // always show address-loading
-                default:
-                    return false;
-            }
-        }
-        public static MethodDefinition FindFieldUsageInType(TypeDefinition type, FieldDefinition analyzedField, bool ReadByOrAssignBy /*true is Read false is Assign*/)
-        {
-            string name = analyzedField.Name;
-            foreach (MethodDefinition method in type.Methods)
-            {
-                bool found = false;
-                if (!method.HasBody)
-                    continue;
-                foreach (Instruction instr in method.Body.Instructions)
-                {
-                    bool isAccessBy;
-                    if (ReadByOrAssignBy)
-                        isAccessBy = CanBeReadReference(instr.OpCode.Code);
-                    else
-                        isAccessBy = CanBeAssignReference(instr.OpCode.Code);
-                    if (isAccessBy)
-                    {
-                        FieldReference mr = instr.Operand as FieldReference;
-                        if (mr != null && mr.Name == name &&
-                            IsReferencedBy(analyzedField.DeclaringType, mr.DeclaringType) &&
-                            mr.Resolve() == analyzedField)
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-
-                method.Body = null;
-
-                if (found)
-                    return method;
-            }
-            return null;
-        }
-
-        public static MethodDefinition FindVariableOfTypeUsageInType(TypeDefinition type, TypeDefinition variableType)
-        {
-            foreach (MethodDefinition method in type.Methods)
-            {
-                bool found = false;
-                if (!method.HasBody)
-                    continue;
-                foreach (var v in method.Body.Variables)
-                {
-                    if (v.VariableType.ResolveWithinSameModule() == variableType)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-
-                method.Body = null;
-
-                if (found)
-                    return method;
-            }
-            return null;
-        }
-
-        public static TypeDefinition GetTypeDef(AstNode expr)
-        {
-            var tr = GetTypeRef(expr);
-            var td = tr as TypeDefinition;
-            if (td == null && tr != null)
-                td = tr.Resolve();
-            return td;
-        }
-
-        public static string GetClassName(AstNode expr)
-        {
-            string className = "";
-            var plist = expr.Ancestors.OfType<TypeDeclaration>().ToList();
-            if (plist.Count > 0)
-            {
-                className = plist[0].Name;
-            }
-            return className;
-        }
-
-        public static string GetClassBaseName(AstNode expr)
-        {
-            string baseName = "";
-            var typedecl = expr as TypeDeclaration;
-
-            if (typedecl == null)
-            {
-                var plist = expr.Ancestors.OfType<TypeDeclaration>().ToList();
-                if (plist.Count > 0)
-                {
-                    TypeDeclaration type = plist[0];
-                    var blist = type.BaseTypes.ToList();
-                    if (blist.Count() > 0)
-                    {
-                        baseName = blist[0].GetText();
-                    }
-                }
-            }
-            else
-            {
-                var blist = typedecl.BaseTypes.ToList();
-                if (blist.Count() > 0)
-                {
-                    baseName = blist[0].GetText();
-                }
-            }
-            return baseName;
-        }
-    }
-
-    #endregion
-    #region visitor
-    class QModuleVisitor : DepthFirstAstVisitor
-    {
-        QModule module;
-        public QModuleVisitor(QModule module)
-        {
-            this.module = module;
-        }
-
-        public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
-        {
-            base.VisitTypeDeclaration(typeDeclaration);
-            var anon = typeDeclaration.Annotation<TypeDefinition>();
-            if (anon != null)
-            {
-                var t = new QType(module, anon, typeDeclaration);
-                module.AddType(t);
-                typeDeclaration.AddAnnotation(t);
-            }
-        }
-
-        public override void VisitDelegateDeclaration(DelegateDeclaration delegateDeclaration)
-        {
-            base.VisitDelegateDeclaration(delegateDeclaration);
-            var anon = delegateDeclaration.Annotation<TypeDefinition>();
-            if (anon != null)
-            {
-                var t = new QType(module, anon, delegateDeclaration);
-                module.AddType(t);
-                delegateDeclaration.AddAnnotation(t);
-            }
-        }
-    }
-
-    class QTypeVisitor : DepthFirstAstVisitor
-    {
-        QType type;
-        public QTypeVisitor(QType type)
-        {
-            this.type = type;
-        }
-
-        public override void VisitMethodDeclaration(MethodDeclaration methodDeclaration)
-        {
-            base.VisitMethodDeclaration(methodDeclaration);
-            var anon = methodDeclaration.Annotation<MethodDefinition>();
-            if (anon != null)
-            {
-                var m = new QMethod(type, anon, methodDeclaration);
-                type.AddMethod(m);
-                methodDeclaration.AddAnnotation(m);
-            }
-        }
-
-        public override void VisitPropertyDeclaration(PropertyDeclaration propertyDeclaration)
-        {
-            base.VisitPropertyDeclaration(propertyDeclaration);
-            var anon = propertyDeclaration.Annotation<PropertyDefinition>();
-            if (anon != null)
-            {
-                var p = new QProperty(type, anon, propertyDeclaration);
-                type.AddProperty(p);
-                propertyDeclaration.AddAnnotation(p);
-            }
-        }
-
-        public override void VisitFieldDeclaration(FieldDeclaration fieldDeclaration)
-        {
-            base.VisitFieldDeclaration(fieldDeclaration);
-            var anon = fieldDeclaration.Annotation<FieldDefinition>();
-            if (anon != null)
-            {
-                var f = new QField(type, anon, fieldDeclaration);
-                type.AddField(f);
-                fieldDeclaration.AddAnnotation(f);
-            }
-        }
-
-        public override void VisitEventDeclaration(EventDeclaration eventDeclaration)
-        {
-            base.VisitEventDeclaration(eventDeclaration);
-            var anon = eventDeclaration.Annotation<EventDefinition>();
-            if (anon != null)
-            {
-                var e = new QEvent(type, anon, eventDeclaration);
-                type.AddEvent(e);
-                eventDeclaration.AddAnnotation(e);
-            }
-        }
-
-        public override void VisitConstructorDeclaration(ConstructorDeclaration constructorDeclaration)
-        {
-            base.VisitConstructorDeclaration(constructorDeclaration);
-            var anon = constructorDeclaration.Annotation<MethodDefinition>();
-            if (anon != null)
-            {
-                var m = new QMethod(type, anon, constructorDeclaration);
-                type.AddCtor(m);
-                constructorDeclaration.AddAnnotation(m);
-            }
-        }
-
-        public override void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
-        {
-            base.VisitNamespaceDeclaration(namespaceDeclaration);
-            type.ns = namespaceDeclaration;
-        }
-
-        public override void VisitIndexerDeclaration(IndexerDeclaration indexerDeclaration)
-        {
-            base.VisitIndexerDeclaration(indexerDeclaration);
-            var anon = indexerDeclaration.Annotation<PropertyDefinition>();
-            if (anon != null)
-            {
-                var p = new QProperty(type, anon, indexerDeclaration);
-                type.AddIndexer(p);
-                indexerDeclaration.AddAnnotation(p);
-            }
-        }
-    }
-#endregion
-
-#region formatter
-    public class TextFormatter : IDisposable
-    {
-        public readonly ITextOutput output;
-        int indentation;
-        bool needsIndent = true;
-        //bool isAtStartOfLine = true;
-        int line, column;
-
-        public int Indentation
-        {
-            get { return this.indentation; }
-            set { this.indentation = value; }
-        }
-
-        public TextLocation Location
-        {
-            get { return new TextLocation(line, column + (needsIndent ? indentation * IndentationString.Length : 0)); }
-        }
-
-        public string IndentationString { get; set; }
-
-        public TextFormatter(ITextOutput output)
-        {
-            if (output == null)
-                throw new ArgumentNullException("output");
-            this.output = output;
-            this.IndentationString = "\t";
-            this.line = 1;
-            this.column = 1;
-        }
-
-        public void Dispose()
-        {
-            GC.SuppressFinalize(this);
-        }
-
-        public void Write(string content)
-        {
-            WriteIndentation();
-            output.Write(content);
-            column += content.Length;
-            //isAtStartOfLine = false;
-        }
-
-        public void WriteLine(string content)
-        {
-            Write(content);
-            NewLine();
-        }
-        public void WriteLine()
-        {
-            NewLine();
-        }
-        public void WriteType(TypeReference r)
-        {
-            bool isPrimitive;
-            string real = Util.TypeToString(r, out isPrimitive);
-            Write(real);
-        }
-
-        public void Space()
-        {
-            WriteIndentation();
-            column++;
-            output.Write(' ');
-        }
-
-        protected void WriteIndentation()
-        {
-            if (needsIndent)
-            {
-                needsIndent = false;
-                for (int i = 0; i < indentation; i++)
-                {
-                    output.Write(this.IndentationString);
-                }
-                column += indentation * IndentationString.Length;
-            }
-        }
-
-        public void NewLine()
-        {
-            output.WriteLine();
-            column = 1;
-            line++;
-            needsIndent = true;
-            //isAtStartOfLine = true;
-        }
-
-        public void Indent()
-        {
-            indentation++;
-        }
-
-        public void Unindent()
-        {
-            indentation--;
-        }
-
-        public void WriteComment(CommentType commentType, string content)
-        {
-            WriteIndentation();
-            switch (commentType)
-            {
-                case CommentType.SingleLine:
-                    output.Write("//");
-                    output.WriteLine(content);
-                    column += 2 + content.Length;
-                    needsIndent = true;
-                    //isAtStartOfLine = true;
-                    break;
-                case CommentType.MultiLine:
-                    output.Write("/*");
-                    output.Write(content);
-                    output.Write("*/");
-                    column += 2;
-                    UpdateEndLocation(content, ref line, ref column);
-                    column += 2;
-                    //isAtStartOfLine = false;
-                    break;
-                case CommentType.Documentation:
-                    output.Write("///");
-                    output.WriteLine(content);
-                    column += 3 + content.Length;
-                    needsIndent = true;
-                    //isAtStartOfLine = true;
-                    break;
-                case CommentType.MultiLineDocumentation:
-                    output.Write("/**");
-                    output.Write(content);
-                    output.Write("*/");
-                    column += 3;
-                    UpdateEndLocation(content, ref line, ref column);
-                    column += 2;
-                    //isAtStartOfLine = false;
-                    break;
-                default:
-                    output.Write(content);
-                    column += content.Length;
-                    break;
-            }
-        }
-
-        static void UpdateEndLocation(string content, ref int line, ref int column)
-        {
-            if (string.IsNullOrEmpty(content))
-                return;
-            for (int i = 0; i < content.Length; i++)
-            {
-                char ch = content[i];
-                switch (ch)
-                {
-                    case '\r':
-                        if (i + 1 < content.Length && content[i + 1] == '\n')
-                            i++;
-                        goto case '\n';
-                    case '\n':
-                        line++;
-                        column = 0;
-                        break;
-                }
-                column++;
-            }
-        }
-
-        /*public override void WritePreProcessorDirective(PreProcessorDirectiveType type, string argument)
-        {
-            // pre-processor directive must start on its own line
-            if (!isAtStartOfLine)
-                NewLine();
-            WriteIndentation();
-            output.Write('#');
-            string directive = type.ToString().ToLowerInvariant();
-            output.Write(directive);
-            column += 1 + directive.Length;
-            if (!string.IsNullOrEmpty(argument))
-            {
-                output.Write(' ');
-                output.Write(argument);
-                column += 1 + argument.Length;
-            }
-            NewLine();
-        }
-        */
-        /*public override void WritePrimitiveValue(object value, string literalValue = null)
-        {
-            if (literalValue != null)
-            {
-                output.Write(literalValue);
-                column += literalValue.Length;
-                return;
-            }
-
-            if (value == null)
-            {
-                // usually NullReferenceExpression should be used for this, but we'll handle it anyways
-                output.Write("null");
-                column += 4;
-                return;
-            }
-
-            if (value is bool)
-            {
-                if ((bool)value)
-                {
-                    output.Write("true");
-                    column += 4;
-                }
-                else
-                {
-                    output.Write("false");
-                    column += 5;
-                }
-                return;
-            }
-
-            if (value is string)
-            {
-                string tmp = "\"" + ConvertString(value.ToString()) + "\"";
-                column += tmp.Length;
-                output.Write(tmp);
-            }
-            else if (value is char)
-            {
-                string tmp = "'" + ConvertCharLiteral((char)value) + "'";
-                column += tmp.Length;
-                output.Write(tmp);
-            }
-            else if (value is decimal)
-            {
-                string str = ((decimal)value).ToString(NumberFormatInfo.InvariantInfo) + "m";
-                column += str.Length;
-                output.Write(str);
-            }
-            else if (value is float)
-            {
-                float f = (float)value;
-                if (float.IsInfinity(f) || float.IsNaN(f))
-                {
-                    // Strictly speaking, these aren't PrimitiveExpressions;
-                    // but we still support writing these to make life easier for code generators.
-                    output.Write("float");
-                    column += 5;
-                    Write(".");
-                    if (float.IsPositiveInfinity(f))
-                    {
-                        output.Write("PositiveInfinity");
-                        column += "PositiveInfinity".Length;
-                    }
-                    else if (float.IsNegativeInfinity(f))
-                    {
-                        output.Write("NegativeInfinity");
-                        column += "NegativeInfinity".Length;
-                    }
-                    else
-                    {
-                        output.Write("NaN");
-                        column += 3;
-                    }
-                    return;
-                }
-                if (f == 0 && 1 / f == float.NegativeInfinity)
-                {
-                    // negative zero is a special case
-                    // (again, not a primitive expression, but it's better to handle
-                    // the special case here than to do it in all code generators)
-                    output.Write("-");
-                    column++;
-                }
-                var str = f.ToString("R", NumberFormatInfo.InvariantInfo) + "f";
-                column += str.Length;
-                output.Write(str);
-            }
-            else if (value is double)
-            {
-                double f = (double)value;
-                if (double.IsInfinity(f) || double.IsNaN(f))
-                {
-                    // Strictly speaking, these aren't PrimitiveExpressions;
-                    // but we still support writing these to make life easier for code generators.
-                    output.Write("double");
-                    column += 6;
-                    Write(".");
-                    if (double.IsPositiveInfinity(f))
-                    {
-                        output.Write("PositiveInfinity");
-                        column += "PositiveInfinity".Length;
-                    }
-                    else if (double.IsNegativeInfinity(f))
-                    {
-                        output.Write("NegativeInfinity");
-                        column += "NegativeInfinity".Length;
-                    }
-                    else
-                    {
-                        output.Write("NaN");
-                        column += 3;
-                    }
-                    return;
-                }
-                if (f == 0 && 1 / f == double.NegativeInfinity)
-                {
-                    // negative zero is a special case
-                    // (again, not a primitive expression, but it's better to handle
-                    // the special case here than to do it in all code generators)
-                    output.Write("-");
-                }
-                string number = f.ToString("R", NumberFormatInfo.InvariantInfo);
-                if (number.IndexOf('.') < 0 && number.IndexOf('E') < 0)
-                {
-                    number += ".0";
-                }
-                output.Write(number);
-            }
-            else if (value is IFormattable)
-            {
-                StringBuilder b = new StringBuilder();
-                //				if (primitiveExpression.LiteralFormat == LiteralFormat.HexadecimalNumber) {
-                //					b.Append("0x");
-                //					b.Append(((IFormattable)val).ToString("x", NumberFormatInfo.InvariantInfo));
-                //				} else {
-                b.Append(((IFormattable)value).ToString(null, NumberFormatInfo.InvariantInfo));
-                //				}
-                if (value is uint || value is ulong)
-                {
-                    b.Append("u");
-                }
-                if (value is long || value is ulong)
-                {
-                    b.Append("L");
-                }
-                output.Write(b.ToString());
-                column += b.Length;
-            }
-            else
-            {
-                output.Write(value.ToString());
-                column += value.ToString().Length;
-            }
-        }
-
-        /// <summary>
-        /// Gets the escape sequence for the specified character within a char literal.
-        /// Does not include the single quotes surrounding the char literal.
-        /// </summary>
-        public static string ConvertCharLiteral(char ch)
-        {
-            if (ch == '\'')
-            {
-                return "\\'";
-            }
-            return ConvertChar(ch);
-        }
-
-        /// <summary>
-        /// Gets the escape sequence for the specified character.
-        /// </summary>
-        /// <remarks>This method does not convert ' or ".</remarks>
-        static string ConvertChar(char ch)
-        {
-            switch (ch)
-            {
-                case '\\':
-                    return "\\\\";
-                case '\0':
-                    return "\\0";
-                case '\a':
-                    return "\\a";
-                case '\b':
-                    return "\\b";
-                case '\f':
-                    return "\\f";
-                case '\n':
-                    return "\\n";
-                case '\r':
-                    return "\\r";
-                case '\t':
-                    return "\\t";
-                case '\v':
-                    return "\\v";
-                default:
-                    if (char.IsControl(ch) || char.IsSurrogate(ch) ||
-                        // print all uncommon white spaces as numbers
-                        (char.IsWhiteSpace(ch) && ch != ' '))
-                    {
-                        return "\\u" + ((int)ch).ToString("x4");
-                    }
-                    else
-                    {
-                        return ch.ToString();
-                    }
-            }
-        }
-
-        /// <summary>
-        /// Converts special characters to escape sequences within the given string.
-        /// </summary>
-        public static string ConvertString(string str)
-        {
-            StringBuilder sb = new StringBuilder();
-            foreach (char ch in str)
-            {
-                if (ch == '"')
-                {
-                    sb.Append("\\\"");
-                }
-                else
-                {
-                    sb.Append(ConvertChar(ch));
-                }
-            }
-            return sb.ToString();
         }*/
     }
-#endregion
+
+
 }
