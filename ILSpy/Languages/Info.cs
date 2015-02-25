@@ -692,6 +692,17 @@ namespace QuantKit
         List<ClassInfo> interfaces = null;
         List<MethodInfo> methods = null;
         
+        public string FullName
+        {
+            get { return this.def.FullName; }
+        }
+        public Collection<FieldDefinition> Fields
+        {
+            get
+            {
+                return this.def.Fields;
+            }
+        }
         public bool IsEnum
         {
             get { return this.def.IsEnum; }
@@ -714,7 +725,10 @@ namespace QuantKit
                     return false;
             }
         }
-
+        public ModuleDefinition Module
+        {
+            get { return this.def.Module; }
+        }
         public List<MethodInfo> Methods
         {
             get

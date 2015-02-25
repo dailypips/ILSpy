@@ -225,7 +225,7 @@ namespace QuantKit
             output.WriteLine("\nstatic QString nullstring = QString();\n\nunsigned char CurrencyId::GetId(const QString& name)\n{\n    CurrencyId_by_name& index = currencyIds.get<by_name>();\n    CurrencyId_by_name::iterator it = index.find(name);\n    if (it != index.end())\n        return it->code;\n    else\n        return 0;\n}\n\nconst QString& CurrencyId::GetName(unsigned char id)\n{\n    CurrencyId_by_code& index = currencyIds.get<by_code>();\n    CurrencyId_by_code::iterator it = index.find(id);\n    if (it != index.end())\n        return it->name;\n    else\n        return nullstring;\n}\n\n} // namespace QuantKit");
         }
 
-        public static void WriteCurrencyIdInclude(TypeDefinition def, ITextOutput output)
+        public static void WriteCurrencyIdInclude(ClassInfo info, ITextOutput output)
         {
             output.WriteLine("class QUANTKIT_EXPORT CurrencyId");
             output.WriteLine("{");
@@ -241,7 +241,7 @@ namespace QuantKit
             output.WriteLine("*/");
             output.WriteLine("static const QString& GetName(unsigned char id);");
             output.WriteLine();
-            foreach (var f in def.Fields)
+            foreach (var f in info.def.Fields)
             {
                 if (f.Constant != null)
                 {
@@ -256,7 +256,7 @@ namespace QuantKit
             output.WriteLine("};");
         }
 
-        public static void WriteEventTypeInclude(TypeDefinition def, ITextOutput output)
+        public static void WriteEventTypeInclude(ClassInfo def, ITextOutput output)
         {
             output.WriteLine("class QUANTKIT_EXPORT EventType");
             output.WriteLine("{");

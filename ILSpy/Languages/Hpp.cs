@@ -139,23 +139,23 @@ namespace QuantKit
             }*/
         }
 
-        static void BuildIncludeList(TypeDefinition def, out List<string> externalList, out List<string> moduleClassList, out List<string> moduleEnumOrInterfaceList)
+        static void BuildIncludeList(ClassInfo info, out List<string> externalList, out List<string> moduleClassList, out List<string> moduleEnumOrInterfaceList)
         {
             List<string> elist = new List<string>();
             List<string> mlist = new List<string>();
             List<string> clist = new List<string>();
 
-            var info = InfoUtil.Info(def);
-            bool hasBaseType = def.BaseType != null && def.BaseType.Name != "Object";
+            //var info = InfoUtil.Info(def);
+            bool hasBaseType = info.def.BaseType != null && info.def.BaseType.Name != "Object";
             if (hasBaseType)
-                mlist.Add(def.BaseType.Name); // basetype must be include file
-            if (def.HasInterfaces)
+                mlist.Add(info.def.BaseType.Name); // basetype must be include file
+            if (info.HasInterfaces)
             {
-                foreach (var i in def.Interfaces)
+                foreach (var i in info.Interfaces)
                 {
-                    if (i.Namespace != def.Namespace)
+                    if (i.Namespace != info.Namespace)
                         continue;
-                    if (i.Module == def.Module)
+                    if (i.Module == info.Module)
                         mlist.Add(i.Name);
                     else
                         elist.Add(i.Name);
@@ -163,9 +163,9 @@ namespace QuantKit
             }
             foreach (var m in info.Methods)
             {
-                Util.AddInclude(def.Namespace, m.ReturnType, elist, clist, mlist);
+                Util.AddInclude(info.Namespace, m.ReturnType, elist, clist, mlist);
                 foreach (var p in m.Parameters)
-                    Util.AddInclude(def.Namespace, p.ParameterType, elist, clist, mlist);
+                    Util.AddInclude(info.Namespace, p.ParameterType, elist, clist, mlist);
                 //special for currencyId
                 foreach (var p in m.Parameters)
                 {
@@ -173,9 +173,9 @@ namespace QuantKit
                         mlist.Add("CurrencyId");
                 }
             }
-            foreach (var f in def.Fields)
+            foreach (var f in info.Fields)
             {
-                Util.AddInclude(def.Namespace, f.FieldType, elist, clist, mlist);
+                Util.AddInclude(info.Namespace, f.FieldType, elist, clist, mlist);
             }
 
             externalList = elist.Distinct<string>().ToList();
@@ -183,13 +183,13 @@ namespace QuantKit
             moduleEnumOrInterfaceList = mlist.Distinct<string>().ToList();
         }
 
-        static void WriteIncludeBody(TypeDefinition def, ITextOutput output)
+        static void WriteIncludeBody(ClassInfo info, ITextOutput output)
         {
             List<string> externalList;
             List<string> moduleEnumOrInterfaceList;
             List<string> classList;
 
-            BuildIncludeList(def, out externalList, out classList, out moduleEnumOrInterfaceList);
+            BuildIncludeList(info, out externalList, out classList, out moduleEnumOrInterfaceList);
             //TODO IEnumable and etc.. ICollection...
             output.WriteLine("#include <QuantKit/quantkit_global.h>");
             foreach (var e in externalList)
@@ -197,7 +197,7 @@ namespace QuantKit
                 if (!e.StartsWith("Class"))
                     output.WriteLine("#include <" + e + ">");
             }
-            if (!def.IsInterface && !Helper.isClassAsEnum(def))
+            if (!info.IsInterface && !Helper.isClassAsEnum(info.def))
                 output.WriteLine("#include <QSharedDataPointer>");
 
             if (moduleEnumOrInterfaceList.Count() > 0)
@@ -205,7 +205,7 @@ namespace QuantKit
 
             foreach (var m in moduleEnumOrInterfaceList)
             {
-                if (m != def.Name)
+                if (m != info.Name)
                 {
                     output.WriteLine("#include <QuantKit/" + m + ".h>");
                 }
@@ -235,19 +235,19 @@ namespace QuantKit
                 output.WriteLine(";");
         }
 
-        static void WriteClassHead(TypeDefinition def, ITextOutput output)
+        static void WriteClassHead(ClassInfo info, ITextOutput output)
         {
             bool isValueType;
-            output.Write("class QUANTKIT_EXPORT " + Util.TypeString(def, out isValueType));
-            bool hasBaseType = def.BaseType != null && def.BaseType.Name != "Object";
-            var info = InfoUtil.Info(def);
+            output.Write("class QUANTKIT_EXPORT " + Util.TypeString(info.def, out isValueType));
+            bool hasBaseType = info.def.BaseType != null && info.def.BaseType.Name != "Object";
+            //var info = InfoUtil.Info(def);
             if (hasBaseType || info.HasInterfaces)
             {
                 bool isFirst = true;
                 if (hasBaseType)
                 {
                     output.Write(" : public ");
-                    output.Write(def.BaseType.Name);
+                    output.Write(info.def.BaseType.Name);
                     isFirst = false;
                 }
 
@@ -336,13 +336,13 @@ namespace QuantKit
             return false;
         }
 
-        static void ConvertToSection(TypeDefinition def, List<MethodInfo> ctorSections, List<MethodInfo> pulicSections, List<MethodInfo> protectedSection, List<MethodInfo> privateSection)
+        static void ConvertToSection(ClassInfo info, List<MethodInfo> ctorSections, List<MethodInfo> pulicSections, List<MethodInfo> protectedSection, List<MethodInfo> privateSection)
         {
             List<MethodInfo> ctors = new List<MethodInfo>();
             List<MethodInfo> props = new List<MethodInfo>();
             List<MethodInfo> others = new List<MethodInfo>();
 
-            var info = InfoUtil.Info(def);
+            //var info = InfoUtil.Info(def);
 
             foreach (var m in info.Methods)
             {
@@ -421,42 +421,42 @@ namespace QuantKit
             foreach (var f in sets)
                 onlySet.Add(f);
         }
-        static void WriteDefaultNullConstructor(TypeDefinition def, ITextOutput output)
+        static void WriteDefaultNullConstructor(ClassInfo info, ITextOutput output)
         {
-            output.WriteLine(def.Name + "();");
+            output.WriteLine(info.Name + "();");
         }
-        static void WriteDefaultCopyConstructor(TypeDefinition def, ITextOutput output)
+        static void WriteDefaultCopyConstructor(ClassInfo info, ITextOutput output)
         {
-            output.WriteLine(def.Name + "(const " + def.Name + " &other);");
+            output.WriteLine(info.Name + "(const " + info.Name + " &other);");
         }
-        static void WriteClassBody(TypeDefinition def, ITextOutput output)
+        static void WriteClassBody(ClassInfo info, ITextOutput output)
         {
-            if (def.Name == "CurrencyId")
+            if (info.Name == "CurrencyId")
             {
-                Helper.WriteCurrencyIdInclude(def, output);
+                Helper.WriteCurrencyIdInclude(info, output);
                 return;
             }
-            if (def.Name == "EventType")
+            if (info.Name == "EventType")
             {
-                Helper.WriteEventTypeInclude(def, output);
+                Helper.WriteEventTypeInclude(info, output);
                 return;
             }
 
-            var tinfo = InfoUtil.Info(def);
+            //var info = InfoUtil.Info(def);
 
             List<MethodInfo> ctorSections = new List<MethodInfo>();
             List<MethodInfo> publicSections = new List<MethodInfo>();
             List<MethodInfo> protectedSection = new List<MethodInfo>();
             List<MethodInfo> privateSection = new List<MethodInfo>();
 
-            ConvertToSection(def, ctorSections, publicSections, protectedSection, privateSection);
+            ConvertToSection(info, ctorSections, publicSections, protectedSection, privateSection);
 
             List<FieldDefinition> GetAndSet = new List<FieldDefinition>();
             List<FieldDefinition> OnlyGet = new List<FieldDefinition>();
             List<FieldDefinition> OnlySet = new List<FieldDefinition>();
-            FindFieldAccess(def, GetAndSet, OnlyGet, OnlySet);
+            FindFieldAccess(info.def, GetAndSet, OnlyGet, OnlySet);
 
-            WriteClassHead(def, output);
+            WriteClassHead(info, output);
             output.WriteLine();
             output.WriteLine("{");
 
@@ -469,13 +469,13 @@ namespace QuantKit
 
                 //if (tinfo != null && tinfo.NullConstructor == null)
                 //    WriteDefaultNullConstructor(def, output);
-                if (tinfo != null && tinfo.CopyConstructor == null)
-                    WriteDefaultCopyConstructor(def, output);
+                if (info != null && info.CopyConstructor == null)
+                    WriteDefaultCopyConstructor(info, output);
                 foreach (var m in ctorSections)
                 {
                     WriteMethod(m.def, output);
                 }
-                WriteAddCppMethod(def, output);
+                WriteAddCppMethod(info.def, output);
                 output.Unindent();
                 if (publicSections.Count() > 0)// || protectedSection.Count() > 0 || privateSection.Count() > 0)
                     output.WriteLine();
@@ -530,21 +530,21 @@ namespace QuantKit
             }
 
             /* write protected section */
-            var cinfo = InfoUtil.Info(def);
-            bool hasChildClass = cinfo != null && cinfo.HasDerivedClass;
-            bool isDerivedClass = cinfo!=null && cinfo.isDerivedClass;
-            if(!def.IsInterface && !Helper.isClassAsEnum(def) &&  hasChildClass)//hasChildClass(def))
+            //var cinfo = InfoUtil.Info(def);
+            bool hasChildClass = info.HasDerivedClass;
+            bool isDerivedClass = info.isDerivedClass;
+            if(!info.IsInterface && !Helper.isClassAsEnum(info.def) &&  hasChildClass)//hasChildClass(def))
             {
                 output.WriteLine();
                 output.WriteLine("protected:");
                 output.Indent();
-                output.WriteLine(def.Name + "(" + def.Name + "Private& dd);");
+                output.WriteLine(info.Name + "(" + info.Name + "Private& dd);");
                 if (!isDerivedClass)
-                    output.WriteLine("QSharedDataPointer<" + def.Name + "Private> d_ptr;");
+                    output.WriteLine("QSharedDataPointer<" + info.Name + "Private> d_ptr;");
                 output.Unindent();
             }
 
-            if (!def.IsInterface && !Helper.isClassAsEnum(def))
+            if (!info.IsInterface && !Helper.isClassAsEnum(info.def))
             {
                 output.WriteLine();
                 output.WriteLine("private:");
@@ -552,10 +552,10 @@ namespace QuantKit
                 //if (!hasChildClass(def))
                 if(!hasChildClass && !isDerivedClass)
                 {
-                    output.WriteLine("QSharedDataPointer<" + def.Name + "Private> d_ptr;");
+                    output.WriteLine("QSharedDataPointer<" + info.Name + "Private> d_ptr;");
                     output.WriteLine();
                 }
-                output.WriteLine("friend QUANTKIT_EXPORT QDataStream &operator<<(QDataStream & stream, const " + def.Name + " &"+ def.Name.ToLower()+");");
+                output.WriteLine("friend QUANTKIT_EXPORT QDataStream &operator<<(QDataStream & stream, const " + info.Name + " &"+ info.Name.ToLower()+");");
                 output.Unindent();
             }
             /*if (protectedSection.Count() > 0)
@@ -586,18 +586,17 @@ namespace QuantKit
             output.WriteLine("};");
         }
 
-        static void WriteForward(TypeDefinition def, ITextOutput output)
+        static void WriteForward(ClassInfo info, ITextOutput output)
         {
             List<string> elist;
             List<string> mlist;
             List<string> clist;
-            BuildIncludeList(def, out elist, out clist, out mlist);
-            var info = InfoUtil.Info(def);
+            BuildIncludeList(info, out elist, out clist, out mlist);
             if (info != null)
             {
                 foreach (var m in clist)
                 {
-                    if (m != def.Name)
+                    if (m != info.Name)
                     {
                         output.WriteLine("class " + m + ";");
                         //output.WriteLine("#include <QuantKit/" + m + ".h>");
@@ -607,31 +606,32 @@ namespace QuantKit
                     output.WriteLine();
             }
         }
-        public static void WriteClass(TypeDefinition def, ITextOutput output)
+        public static void WriteClass(ClassInfo info, ITextOutput output)
         {
 
-            WriteHeadStart(def.Name, output);
+            //var info = InfoUtil.Info(def);
+            WriteHeadStart(info.Name, output);
             output.WriteLine();
-            WriteIncludeBody(def, output);
-            WriteNamespaceStart(def.Namespace, output);
-            if (!def.IsInterface && !Helper.isClassAsEnum(def))
+            WriteIncludeBody(info, output);
+            WriteNamespaceStart(info.Namespace, output);
+            if (!info.IsInterface && !Helper.isClassAsEnum(info.def))
             {
-                output.WriteLine("class " + def.Name + "Private;");
+                output.WriteLine("class " + info.Name + "Private;");
                 output.WriteLine();
             }
-            WriteForward(def, output);
-            WriteClassBody(def, output);
+            WriteForward(info, output);
+            WriteClassBody(info, output);
             //output.WriteLine();
 
-            if (!def.IsInterface && !Helper.isClassAsEnum(def))
+            if (!info.IsInterface && !Helper.isClassAsEnum(info.def))
             {
                 output.WriteLine();
-                output.WriteLine("QUANTKIT_EXPORT QDataStream &operator<<(QDataStream &, const " + def.Name + " &);");
+                output.WriteLine("QUANTKIT_EXPORT QDataStream &operator<<(QDataStream &, const " + info.Name + " &);");
             }
-            WriteNamespaceEnd(def.Namespace, output);
+            WriteNamespaceEnd(info.Namespace, output);
             //if (def.Name != "CurrencyId" && def.Name != "EventType" && !def.IsEnum && !def.IsInterface)
             //    output.WriteLine("Q_DECLARE_SHARED(QuantKit::" + def.Name + ")");
-            WriteHeadEnd(def.Name, output);
+            WriteHeadEnd(info.Name, output);
         }
 
         static void WriteEnumBody(ClassInfo info, ITextOutput output)
@@ -639,40 +639,58 @@ namespace QuantKit
             output.WriteLine("enum " + info.Name + " : unsigned char");
             output.WriteLine("{");
             output.Indent();
-            var members = info.Declaration.Descendants.OfType<EnumMemberDeclaration>().ToList();
-            for (int i = 0; i < members.Count(); ++i)
+            int firstValue = 0;
+            for (int i = 1; i < info.Fields.Count();++i )
             {
-                var item = members[i];
-                var text = item.GetText();
-                var split = text.Split('=');
-                output.Write(split[0]);
-                if (split.Count() >= 2)
+                output.Write(info.Fields[i].Name);
+ 
+                if (info.Fields[i].HasConstant)
                 {
-                    output.Write(" = ");
-                    output.Write(split[1]);
+                    int value = Int32.Parse(info.Fields[i].Constant.ToString());
+                    if (value != i-1 + firstValue)
+                    {
+                        output.Write(" = " + value.ToString());
+                        firstValue = value;
+                    }
                 }
-                if (i != members.Count() - 1)
+                if( i!= info.Fields.Count() -1)
                     output.WriteLine(",");
                 else
                     output.WriteLine();
             }
+                /*var members = info.Declaration.Descendants.OfType<EnumMemberDeclaration>().ToList();
+                for (int i = 0; i < members.Count(); ++i)
+                {
+                    var item = members[i];
+                    var text = item.GetText();
+                    var split = text.Split('=');
+                    output.Write(split[0]);
+                    if (split.Count() >= 2)
+                    {
+                        output.Write(" = ");
+                        output.Write(split[1]);
+                    }
+                    if (i != members.Count() - 1)
+                        output.WriteLine(",");
+                    else
+                        output.WriteLine();
+                }*/
 
-            output.Unindent();
+                output.Unindent();
             output.WriteLine("};");
         }
 
-        public static void WriteEnum(TypeDefinition def, ITextOutput output)
+        public static void WriteEnum(ClassInfo info, ITextOutput output)
         {
-            if (RenameUtil.EnumRenameDict.ContainsKey(def.FullName))
+            if (RenameUtil.EnumRenameDict.ContainsKey(info.FullName))
             {
-                def.Name = RenameUtil.EnumRenameDict[def.FullName];
+                info.def.Name = RenameUtil.EnumRenameDict[info.def.FullName];
             }
-            WriteHeadStart(def.Name, output);
-            WriteNamespaceStart(def.Namespace, output);
-            var info = InfoUtil.Info(def);
+            WriteHeadStart(info.Name, output);
+            WriteNamespaceStart(info.Namespace, output);
             WriteEnumBody(info, output);
-            WriteNamespaceEnd(def.Namespace, output);
-            WriteHeadEnd(def.Name, output);
+            WriteNamespaceEnd(info.Namespace, output);
+            WriteHeadEnd(info.Name, output);
         }
     }
 }

@@ -133,10 +133,11 @@ namespace QuantKit
         {
             if (!IsNeedWriteHpp(def))
                 return;
+            var info = InfoUtil.Info(def);
             if (def.IsEnum)
-                Hpp.WriteEnum(def, output);
+                Hpp.WriteEnum(info, output);
             else
-                Hpp.WriteClass(def, output);
+                Hpp.WriteClass(info, output);
         }
 
         public void PreProcess(ModuleDefinition module)
