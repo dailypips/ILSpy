@@ -91,7 +91,7 @@ namespace QuantKit
             }
             else
             {
-                output.Write(info.ReturnTypeName);
+                output.Write(info.ReturnType.TypeName);
                 output.Write(" ");
                 output.Write(def.DeclaringType.Name + "::"+info.Name);
             }
@@ -399,7 +399,7 @@ namespace QuantKit
             }
             else
             {
-                output.Write(info.ReturnTypeName);
+                output.Write(info.ReturnType.TypeName);
                 output.Write(" ");
                 output.Write(def.DeclaringType.Name + "::" + info.Name);
             }

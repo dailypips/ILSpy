@@ -120,9 +120,13 @@
     <Compile Include="CreateListDialog.xaml.cs">
       <DependentUpon>CreateListDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Languages\ClassInfo.cs" />
     <Compile Include="Languages\Cpp.cs" />
     <Compile Include="Languages\CppOutoutVisitor.cs" />
     <Compile Include="Languages\Cxx.cs" />
+    <Compile Include="Languages\EnumInfo.cs" />
+    <Compile Include="Languages\EventInfo.cs" />
+    <Compile Include="Languages\FieldInfo.cs" />
     <Compile Include="Languages\Helper.cs" />
     <Compile Include="Languages\Hpp.cs" />
     <Compile Include="Languages\Hxx.cs" />
@@ -151,7 +155,12 @@
     <Compile Include="Languages\Language.cs" />
     <Compile Include="Images\Images.cs" />
     <Compile Include="Languages\Languages.cs" />
+    <Compile Include="Languages\MethodInfo.cs" />
+    <Compile Include="Languages\ModuleInfo.cs" />
+    <Compile Include="Languages\ParameterInfo.cs" />
+    <Compile Include="Languages\PropertyInfo.cs" />
     <Compile Include="Languages\RenameUtil.cs" />
+    <Compile Include="Languages\TypeInfo.cs" />
     <Compile Include="Languages\Util.cs" />
     <Compile Include="LoadedAssembly.cs" />
     <Compile Include="NativeMethods.cs" />

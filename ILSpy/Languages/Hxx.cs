@@ -107,7 +107,7 @@ namespace QuantKit
             {
                 //if (info.modifiers.HasFlag(Modifiers.Virtual))
                 //    output.Write("virtual ");
-                output.Write(info.ReturnTypeName);
+                output.Write(info.ReturnType.TypeName);
                 output.Write(" ");
                 output.Write(info.Name);
             }

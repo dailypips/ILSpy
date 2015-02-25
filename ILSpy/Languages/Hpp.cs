@@ -52,17 +52,17 @@ namespace QuantKit
             }
         }
 
-        static string cancialParameterName(MethodDefinition def, ParameterDefinition p)
+       /* static string cancialParameterName(MethodDefinition def, ParameterDefinition p)
         {
             string result = p.Name;
 
             return result;
-        }
-        static void WriteParameters(MethodDefinition def, ITextOutput output, bool outputOptionValue)
+        }*/
+        static void WriteParameters(MethodInfo info, ITextOutput output, bool outputOptionValue)
         {
             bool isValueType;
             bool isFirst = true;
-            foreach (var p in def.Parameters)
+            foreach (var p in info.Parameters)
             {
                 if (isFirst)
                     isFirst = false;
@@ -111,27 +111,26 @@ namespace QuantKit
             }
         }
 
-        static void WriteMethodHead(MethodDefinition def, ITextOutput output, bool isDeclaration)
+        static void WriteMethodHead(MethodInfo info, ITextOutput output, bool isDeclaration)
         {
-            if (def.IsConstructor && def.IsStatic)
+            if (info.IsConstructor && info.IsStatic)
                 return;
 
-            var info = InfoUtil.Info(def);
             bool isCopyConstructor = info!=null && info.isCopyConstructor;
-            if (def.IsConstructor)
+            if (info.IsConstructor)
             {
-                if (def.Parameters.Count() == 1 && !isCopyConstructor)
+                if (info.Parameters.Count() == 1 && !isCopyConstructor)
                     output.Write("explicit ");
-                output.Write(def.DeclaringType.Name);
+                output.Write(info.DeclaringType.Name);
             }
             else
             {
-                output.Write(info.ReturnTypeName);
+                output.Write(info.ReturnType.TypeName);
                 output.Write(" ");
                 output.Write(info.Name);
             }
             output.Write("(");
-            WriteParameters(def, output, isDeclaration);
+            WriteParameters(info, output, isDeclaration);
             output.Write(")");
             /*if (modifiers.HasFlag(Modifiers.Override))
             {
@@ -217,7 +216,7 @@ namespace QuantKit
             }*/
         }
 
-        static void WriteMethod(MethodDefinition m, ITextOutput output)
+        static void WriteMethod(MethodInfo m, ITextOutput output)
         {
             if (m.IsConstructor && m.IsStatic)
                 return;
@@ -303,25 +302,25 @@ namespace QuantKit
                 output.WriteLine(" value);");
             }
         }
-        static void WriteAddCppMethod(TypeDefinition def, ITextOutput output)
+        static void WriteAddCppMethod(ClassInfo info, ITextOutput output)
         {
-            if (def.IsInterface)
+            if (info.IsInterface)
                 return;
-            output.WriteLine("~" + def.Name + "();");
+            output.WriteLine("~" + info.Name + "();");
             output.WriteLine();
-            output.WriteLine(def.Name +" &operator=(const "+def.Name+" &other);");
+            output.WriteLine(info.Name +" &operator=(const "+info.Name+" &other);");
             output.Unindent();
             output.WriteLine("#ifdef Q_COMPILER_RVALUE_REFS");
             output.Indent();
-            output.WriteLine("inline "+def.Name+" &operator=("+def.Name+" &&other) { qSwap(d_ptr, other.d_ptr); return *this; }");
+            output.WriteLine("inline "+info.Name+" &operator=("+info.Name+" &&other) { qSwap(d_ptr, other.d_ptr); return *this; }");
             //output.WriteLine(def.Name + " &operator=(" + def.Name + " &&other) { swap(other); return *this; }");
             output.Unindent();
             output.WriteLine("#endif");
             output.Indent();
             //output.WriteLine("void swap(" + def.Name + " &other) { d_ptr.swap(other.d_ptr); }");
-            output.WriteLine("inline void swap(" +def.Name+" &other)  { qSwap(d_ptr, other.d_ptr); }");
-            output.WriteLine("inline bool operator==(const " + def.Name + " &other) const { return d_ptr == other.d_ptr; }");
-            output.WriteLine("inline bool operator!=(const " + def.Name + " &other) const { return !(this->operator==(other));  }");
+            output.WriteLine("inline void swap(" +info.Name+" &other)  { qSwap(d_ptr, other.d_ptr); }");
+            output.WriteLine("inline bool operator==(const " + info.Name + " &other) const { return d_ptr == other.d_ptr; }");
+            output.WriteLine("inline bool operator!=(const " + info.Name + " &other) const { return !(this->operator==(other));  }");
         }
 
         static bool hasChildClass(TypeDefinition def)
@@ -387,22 +386,22 @@ namespace QuantKit
             }
         }
             
-        static void FindFieldAccess(TypeDefinition def, List<FieldDefinition> GetAndSet, List<FieldDefinition> onlyGet, List<FieldDefinition> onlySet)
+        static void FindFieldAccess(ClassInfo info, List<FieldDefinition> GetAndSet, List<FieldDefinition> onlyGet, List<FieldDefinition> onlySet)
         {
             List<FieldDefinition> gets = new List<FieldDefinition>();
             List<FieldDefinition> sets = new List<FieldDefinition>();
 
-            foreach (var f in def.Fields)
+            foreach (var f in info.Fields)
             {
-                var info = InfoUtil.Info(f);
-                if (info != null)
+                var finfo = InfoUtil.Info(f);
+                if (finfo != null)
                 {
-                    if (info.ReadByOther.Count() > 0 || info.AssignByOther.Count() > 0)
-                        if (info.DeclareProperty == null)
+                    if (finfo.ReadByOther.Count() > 0 || finfo.AssignByOther.Count() > 0)
+                        if (finfo.DeclareProperty == null)
                             gets.Add(f);
 
-                    if (info.AssignByOther.Count() > 0)
-                        if (info.DeclareProperty == null)
+                    if (finfo.AssignByOther.Count() > 0)
+                        if (finfo.DeclareProperty == null)
                             sets.Add(f);
                 }
             }
@@ -454,7 +453,7 @@ namespace QuantKit
             List<FieldDefinition> GetAndSet = new List<FieldDefinition>();
             List<FieldDefinition> OnlyGet = new List<FieldDefinition>();
             List<FieldDefinition> OnlySet = new List<FieldDefinition>();
-            FindFieldAccess(info.def, GetAndSet, OnlyGet, OnlySet);
+            FindFieldAccess(info, GetAndSet, OnlyGet, OnlySet);
 
             WriteClassHead(info, output);
             output.WriteLine();
@@ -473,9 +472,9 @@ namespace QuantKit
                     WriteDefaultCopyConstructor(info, output);
                 foreach (var m in ctorSections)
                 {
-                    WriteMethod(m.def, output);
+                    WriteMethod(m, output);
                 }
-                WriteAddCppMethod(info.def, output);
+                WriteAddCppMethod(info, output);
                 output.Unindent();
                 if (publicSections.Count() > 0)// || protectedSection.Count() > 0 || privateSection.Count() > 0)
                     output.WriteLine();
@@ -522,7 +521,7 @@ namespace QuantKit
 
                 foreach (var m in publicSections)
                 {
-                    WriteMethod(m.def, output);
+                    WriteMethod(m, output);
                 }
                 output.Unindent();
                 //if (protectedSection.Count() > 0 || privateSection.Count() > 0)
