@@ -25,9 +25,9 @@ using System.Text;
 using System.Threading.Tasks;
 using ICSharpCode.NRefactory.PatternMatching;
 using ICSharpCode.NRefactory.TypeSystem;
+using Mono.Cecil;
 using ICSharpCode.NRefactory.CSharp;
 using ICSharpCode.NRefactory;
-using Mono.Cecil;
 
 namespace QuantKit
 {
@@ -1004,14 +1004,74 @@ namespace QuantKit
         public void VisitMemberReferenceExpression(MemberReferenceExpression memberReferenceExpression)
         {
             StartNode(memberReferenceExpression);
-            memberReferenceExpression.Target.AcceptVisitor(this);
-            WriteToken(Roles.Dot);
-            var methodref = memberReferenceExpression.Annotation<ModuleDefinition>();
-            if (methodref != null)
+            var thisExpr = memberReferenceExpression.Target as ThisReferenceExpression;
+            if (thisExpr == null)
             {
-                WriteIdentifier(methodref.ToString());
+                memberReferenceExpression.Target.AcceptVisitor(this);
+                WriteToken(Roles.Dot);
             }
-            WriteIdentifier(memberReferenceExpression.MemberName);
+            var md = memberReferenceExpression.Annotation<MethodDefinition>();
+            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
+            var finfo = InfoUtil.Info(fd);
+            if (finfo != null && finfo.modifiers.HasFlag(Modifiers.Const))
+            {
+                fd = null;
+                finfo = null;
+            }
+            var minfo = InfoUtil.Info(md);
+
+            if (finfo != null)
+            {
+                var parentExpr = memberReferenceExpression.Parent;
+                bool isRead = true;
+                while (fd != null && parentExpr.NodeType == NodeType.Expression)
+                {
+                    var assignExpr = parentExpr as AssignmentExpression;
+                    if (assignExpr == null)
+                    {
+                        parentExpr = parentExpr.Parent;
+                        continue;
+                    }
+                    else
+                    {
+                        var mlist = assignExpr.Left.DescendantsAndSelf.ToList();
+                        if (mlist[0] == memberReferenceExpression)
+                            isRead = false;
+                        /*var mlist = assignExpr.Left.DescendantsAndSelf.OfType<MemberReferenceExpression>().ToList();
+                        if (mlist == null || mlist.Count() == 0)
+                        {
+                            if (assignExpr.Left == memberReferenceExpression)
+                                isRead = false;
+                        }
+                        else
+                        {
+                            if (mlist[0] == memberReferenceExpression)
+                                isRead = false;
+                        }*/
+                        break;
+                    }
+                }
+                string fname;
+                if (thisExpr != null)
+                    fname = fd.Name;
+                else
+                {
+                    fname = isRead ? finfo.GetterMethodName : finfo.SetterMethodName;
+                    fname = fname + "()";
+                }
+                /*string attr = isRead ? "R" : "W";*/
+                WriteIdentifier(fname);
+            }
+            else if (minfo!=null)
+            {
+                var pinfo = InfoUtil.Info(minfo.Property);
+                if (thisExpr!=null && pinfo != null && pinfo.Field != null)
+                    WriteIdentifier(pinfo.Field.Name);
+                else
+                    WriteIdentifier(minfo.Name + "()");
+            }
+            else
+                WriteIdentifier(memberReferenceExpression.MemberName);
             WriteTypeArguments(memberReferenceExpression.TypeArguments);
             EndNode(memberReferenceExpression);
         }
@@ -1590,7 +1650,7 @@ namespace QuantKit
 
         public void VisitAttributeSection(AttributeSection attributeSection)
         {
-            StartNode(attributeSection);
+            /*StartNode(attributeSection);
             WriteToken(Roles.LBracket);
             if (!string.IsNullOrEmpty(attributeSection.AttributeTarget))
             {
@@ -1608,7 +1668,7 @@ namespace QuantKit
             {
                 NewLine();
             }
-            EndNode(attributeSection);
+            EndNode(attributeSection);*/
         }
 
         public void VisitDelegateDeclaration(DelegateDeclaration delegateDeclaration)

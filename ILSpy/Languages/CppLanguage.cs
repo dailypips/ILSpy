@@ -16,14 +16,6 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using ICSharpCode.Decompiler;
-using ICSharpCode.Decompiler.Ast;
-using ICSharpCode.Decompiler.Ast.Transforms;
-using ICSharpCode.ILSpy;
-using ICSharpCode.ILSpy.Options;
-using ICSharpCode.ILSpy.XmlDoc;
-using ICSharpCode.NRefactory.CSharp;
-using Mono.Cecil;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -35,6 +27,15 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 
+using ICSharpCode.Decompiler;
+using ICSharpCode.Decompiler.Ast;
+using ICSharpCode.Decompiler.Ast.Transforms;
+using ICSharpCode.ILSpy.Options;
+using ICSharpCode.ILSpy.XmlDoc;
+using ICSharpCode.NRefactory.CSharp;
+using Mono.Cecil;
+using ICSharpCode.ILSpy;
+
 namespace QuantKit
 {
     /// <summary>
@@ -43,12 +44,10 @@ namespace QuantKit
     [Export(typeof(Language))]
     public class CppLanguage : Language
     {
-        string name = "C++ for Qt with pimpl";
+        string name = "C++";
         bool showAllMembers = false;
         Predicate<IAstTransform> transformAbortCondition = null;
-
-        AstBuilder globalCodeDomBuilder = null;
-
+        bool needPreProcess = true;
         public CppLanguage()
         {
         }
@@ -60,643 +59,220 @@ namespace QuantKit
 
         public override string FileExtension
         {
-            get { return ".cpp"; }
-        }
-
-        public string CppFileExtension
-        {
-            get { return ".cpp";  }
+            get { return ".h"; }
         }
 
         public static string HppFileExtension
         {
-            get { return ".h";  }
+            get { return ".h"; }
         }
-
-        public static string PrivateFileSuffix
+        public static string HxxFileExtension
         {
-            get { return "_p";  }
+            get { return "_p.h"; }
         }
-
-        public static string MemberPrefix
+        public static string CppFileExtension
         {
-            get { return "m_"; }
+            get { return ".cpp"; }
         }
 
         public override string ProjectFileExtension
         {
-            get { return ".pro"; }
+            get { return ".hproj"; }
         }
 
-        public AstBuilder codeDomBuilder
+        public static string OnlyIncludeNameSpace
         {
-            get {
-                return globalCodeDomBuilder; 
-            }
+            get { return "SmartQuant"; }
         }
-
-        public void DecompileAllIfNeed(ModuleDefinition module, DecompilationOptions options)
-        {
-            if (globalCodeDomBuilder != null)
-                return;
-            var assembly = module.Assembly;
-            globalCodeDomBuilder = CreateAstBuilder(options, currentModule: module);
-            globalCodeDomBuilder.AddAssembly(module.Assembly, onlyAssemblyLevel: false);
-            var transforms = new CppTransform();
-            transforms.Run(globalCodeDomBuilder.SyntaxTree);
-            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
-        }
-
-        public void GenerateCode(AstBuilder codeDomBuilder, ITextOutput output)
-        {
-         //   codeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
-            var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
-            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            codeDomBuilder.SyntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
-        }
-
-        public void GenerateCode(ITextOutput output)
-        {
-           // globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
-            var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
-            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            globalCodeDomBuilder.SyntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
-        }
-
         public void GenerateCode(AstNode node, ITextOutput output)
         {
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
             node.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
         }
-
-        class MethodFind : DepthFirstAstVisitor
+        #region C++
+        static bool isSkipClass(TypeDefinition def)
         {
-            AstNode m_node = null;
-            MethodDefinition method;
-            SyntaxTree syntaxTree;
-            public AstNode node
-            {
-                get
-                {
-                    if (m_node == null)
-                        getNode();
-
-                    return m_node;
-                }
-            }
-            public MethodFind(MethodDefinition md, SyntaxTree tree)
-            {
-                method = md;
-                syntaxTree = tree;
-            }
-
-            public void getNode()
-            {
-                syntaxTree.AcceptVisitor(this);
-            }
-            public override void VisitMethodDeclaration(MethodDeclaration methodDeclaration)
-            {
-                base.VisitMethodDeclaration(methodDeclaration);
-                var anon = methodDeclaration.Annotation<MethodDefinition>();
-                if (anon != null && anon == method)
-                    m_node = methodDeclaration;
-            }
+            var dsdef = Util.GetTypeDefinition(def.Module, "ObjectStreamer");
+            bool isInhertFromObjectStreamer = dsdef != null && Util.isInhertFrom(def, dsdef);
+            bool isInhertFromEventArgs = Util.isInhertFrom(def, "System.EventArgs");
+            if (def.Name == "DataObjectType" || isInhertFromEventArgs || isInhertFromObjectStreamer )
+                return true;
+            else
+                return false;
         }
 
-        class PropertyFind : DepthFirstAstVisitor
+        void WriteCppCode(TypeDefinition def, ITextOutput output)
         {
-            AstNode m_node = null;
-            PropertyDefinition property;
-            SyntaxTree syntaxTree;
-            public AstNode node
+            if (!IsNeedWriteCpp(def))
+                return;
+            if (def.Name == "CurrencyId")
+                Helper.WriteCurrencyIdCode(def, output);
+            else
             {
-                get
-                {
-                    if (m_node == null)
-                        getNode();
-
-                    return m_node;
-                }
-            }
-            public PropertyFind(PropertyDefinition pd, SyntaxTree tree)
-            {
-                property = pd;
-                syntaxTree = tree;
-            }
-
-            public void getNode()
-            {
-                syntaxTree.AcceptVisitor(this);
-            }
-            public override void VisitPropertyDeclaration(PropertyDeclaration propertyDeclaration)
-            {
-                base.VisitPropertyDeclaration(propertyDeclaration);
-                var anon = propertyDeclaration.Annotation<PropertyDefinition>();
-                if (anon != null && anon == property)
-                    m_node = propertyDeclaration;
+                Cpp.WriteClass(def, output);
             }
         }
-
-        class FieldFind : DepthFirstAstVisitor
+        /*void WriteCxxCode(TypeDefinition def, TypeDeclaration decl, ITextOutput output)
         {
-            AstNode m_node = null;
-            FieldDefinition field;
-            SyntaxTree syntaxTree;
-            public AstNode node
-            {
-                get
-                {
-                    if (m_node == null)
-                        getNode();
-
-                    return m_node;
-                }
-            }
-            public FieldFind(FieldDefinition fd, SyntaxTree tree)
-            {
-                field = fd;
-                syntaxTree = tree;
-            }
-
-            public void getNode()
-            {
-                syntaxTree.AcceptVisitor(this);
-            }
-            public override void VisitFieldDeclaration(FieldDeclaration fieldDeclaration)
-            {
-                base.VisitFieldDeclaration(fieldDeclaration);
-                var anon = fieldDeclaration.Annotation<FieldDefinition>();
-                if (anon != null && anon == field)
-                    m_node = fieldDeclaration;
-            }
-        }
-        class TypeFind : DepthFirstAstVisitor
+            if (def.IsEnum || def.IsInterface || isSkipClass(def))
+                return;
+            if (def.Name == "EventType" || def.Name == "CurrencyId")
+                return;
+            if (!def.IsEnum && !def.IsInterface)
+                Cxx.WriteClass(def, decl, output);
+        }*/
+        void WriteHxxCode(TypeDefinition def, ITextOutput output)
         {
-            AstNode m_node = null;
-            TypeDefinition type;
-            SyntaxTree syntaxTree;
-            public AstNode node
-            {
-                get
-                {
-                    if (m_node == null)
-                        getNode();
-
-                    return m_node;
-                }
-            }
-            public TypeFind(TypeDefinition td, SyntaxTree tree)
-            {
-                type = td;
-                syntaxTree = tree;
-            }
-
-            public void getNode()
-            {
-                syntaxTree.AcceptVisitor(this);
-            }
-            public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
-            {
-                base.VisitTypeDeclaration(typeDeclaration);
-                var anon = typeDeclaration.Annotation<TypeDefinition>();
-                if (anon != null && anon == type)
-                    m_node = typeDeclaration;
-            }
+            if (!IsNeedWriteHxx(def))
+                return;
+            Hxx.WriteClass(def, output);
         }
-        class EventFind : DepthFirstAstVisitor
+
+        void WriteHppCode(TypeDefinition def, ITextOutput output)
         {
-            AstNode m_node = null;
-            EventDefinition e;
-            SyntaxTree syntaxTree;
-            public AstNode node
-            {
-                get
-                {
-                    if (m_node == null)
-                        getNode();
-
-                    return m_node;
-                }
-            }
-            public EventFind(EventDefinition ed, SyntaxTree tree)
-            {
-                e = ed;
-                syntaxTree = tree;
-            }
-
-            public void getNode()
-            {
-                syntaxTree.AcceptVisitor(this);
-            }
-            public override void VisitEventDeclaration(EventDeclaration eventDeclaration)
-            {
-                base.VisitEventDeclaration(eventDeclaration);
-                var anon = eventDeclaration.Annotation<EventDefinition>();
-                if (anon != null && anon == e)
-                    m_node = eventDeclaration;
-            }
+            if (!IsNeedWriteHpp(def))
+                return;
+            if (def.IsEnum)
+                Hpp.WriteEnum(def, output);
+            else
+                Hpp.WriteClass(def, output);
         }
+
+        public void PreProcess(ModuleDefinition module)
+        {
+            //TODO find public && internal field reference
+            if (!needPreProcess)
+                return;
+            InfoUtil.BuildModuleDict(module);
+            Helper.BuildEventTypeTable(module);
+            needPreProcess = false;
+        }
+        #endregion
+        #region Decompile
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(method.DeclaringType, includeNamespace: true));
-            DecompileAllIfNeed(method.Module, options);
-            var finder = new MethodFind(method, codeDomBuilder.SyntaxTree);
-            if (finder.node != null)
-            {
-                output.WriteLine("//Found Method in Tree");
-                GenerateCode(finder.node, output);
-            }
-            else
-                output.WriteLine("Cannot find this method in Syntax Tree");
-            //AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: method.DeclaringType, isSingleMember: true);
-           /* if (method.IsConstructor && !method.IsStatic && !method.DeclaringType.IsValueType)
-            {
-                // also fields and other ctors so that the field initializers can be shown as such
-                AddFieldsAndCtors(codeDomBuilder, method.DeclaringType, method.IsStatic);
-                RunTransformsAndGenerateCode(codeDomBuilder, output, options, new SelectCtorTransform(method));
-            }
-            else
-            {
-                codeDomBuilder.AddMethod(method);
-                RunTransformsAndGenerateCode(codeDomBuilder, output, options);
-            }*/
-        }
-
-        class SelectCtorTransform : IAstTransform
-        {
-            readonly MethodDefinition ctorDef;
-
-            public SelectCtorTransform(MethodDefinition ctorDef)
-            {
-                this.ctorDef = ctorDef;
-            }
-
-            public void Run(AstNode compilationUnit)
-            {
-                ConstructorDeclaration ctorDecl = null;
-                foreach (var node in compilationUnit.Children)
-                {
-                    ConstructorDeclaration ctor = node as ConstructorDeclaration;
-                    if (ctor != null)
-                    {
-                        if (ctor.Annotation<MethodDefinition>() == ctorDef)
-                        {
-                            ctorDecl = ctor;
-                        }
-                        else
-                        {
-                            // remove other ctors
-                            ctor.Remove();
-                        }
-                    }
-                    // Remove any fields without initializers
-                    FieldDeclaration fd = node as FieldDeclaration;
-                    if (fd != null && fd.Variables.All(v => v.Initializer.IsNull))
-                        fd.Remove();
-                }
-                if (ctorDecl.Initializer.ConstructorInitializerType == ConstructorInitializerType.This)
-                {
-                    // remove all fields
-                    foreach (var node in compilationUnit.Children)
-                        if (node is FieldDeclaration)
-                            node.Remove();
-                }
-            }
+            PreProcess(method.Module);
+            var info = InfoUtil.Info(method);
+            GenerateCode(info.Declaration, output);
         }
 
         public override void DecompileProperty(PropertyDefinition property, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(property.DeclaringType, includeNamespace: true));
-            DecompileAllIfNeed(property.Module, options);
-            var finder = new PropertyFind(property, codeDomBuilder.SyntaxTree);
-            if (finder.node != null)
-            {
-                output.WriteLine("//Found Property in Tree");
-                GenerateCode(finder.node, output);
-            }
-            else
-                output.WriteLine("Cannot find this property in Syntax Tree");
+            PreProcess(property.Module);
+            var info = InfoUtil.Info(property);
+            GenerateCode(info.Declaration, output);
         }
 
         public override void DecompileField(FieldDefinition field, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(field.DeclaringType, includeNamespace: true));
-            DecompileAllIfNeed(field.Module, options);
-            var finder = new FieldFind(field, codeDomBuilder.SyntaxTree);
-            if (finder.node != null)
-            {
-                output.WriteLine("//Found Field in Tree");
-                GenerateCode(finder.node, output);
-            }
-            else
-                output.WriteLine("Cannot find this field in Syntax Tree");
-           /* AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: field.DeclaringType, isSingleMember: true);
-            if (field.IsLiteral)
-            {
-                codeDomBuilder.AddField(field);
-            }
-            else
-            {
-                // also decompile ctors so that the field initializer can be shown
-                AddFieldsAndCtors(codeDomBuilder, field.DeclaringType, field.IsStatic);
-            }
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options, new SelectFieldTransform(field));*/
-        }
-
-        /// <summary>
-        /// Removes all top-level members except for the specified fields.
-        /// </summary>
-        sealed class SelectFieldTransform : IAstTransform
-        {
-            readonly FieldDefinition field;
-
-            public SelectFieldTransform(FieldDefinition field)
-            {
-                this.field = field;
-            }
-
-            public void Run(AstNode compilationUnit)
-            {
-                foreach (var child in compilationUnit.Children)
-                {
-                    if (child is EntityDeclaration)
-                    {
-                        if (child.Annotation<FieldDefinition>() != field)
-                            child.Remove();
-                    }
-                }
-            }
-        }
-
-        void AddFieldsAndCtors(AstBuilder codeDomBuilder, TypeDefinition declaringType, bool isStatic)
-        {
-            foreach (var field in declaringType.Fields)
-            {
-                if (field.IsStatic == isStatic)
-                    codeDomBuilder.AddField(field);
-            }
-            foreach (var ctor in declaringType.Methods)
-            {
-                if (ctor.IsConstructor && ctor.IsStatic == isStatic)
-                    codeDomBuilder.AddMethod(ctor);
-            }
+            PreProcess(field.Module);
+            var info = InfoUtil.Info(field);
+            GenerateCode(info.Declaration, output);
         }
 
         public override void DecompileEvent(EventDefinition ev, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(ev.DeclaringType, includeNamespace: true));
-            DecompileAllIfNeed(ev.Module, options);
-            var finder = new EventFind(ev, codeDomBuilder.SyntaxTree);
-            if (finder.node != null)
-            {
-                output.WriteLine("//Found Event in Tree");
-                GenerateCode(finder.node, output);
-            }
-            else
-                output.WriteLine("Cannot find this Event in Syntax Tree");
-            /*AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: ev.DeclaringType, isSingleMember: true);
-            codeDomBuilder.AddEvent(ev);
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options);*/
+            PreProcess(ev.Module);
+            var info = InfoUtil.Info(ev);
+            GenerateCode(info.Declaration, output);
         }
 
         public override void DecompileType(TypeDefinition type, ITextOutput output, DecompilationOptions options)
         {
-            DecompileAllIfNeed(type.Module, options);
-            var finder = new TypeFind(type, codeDomBuilder.SyntaxTree);
-            if (finder.node != null)
-            {
-                output.WriteLine("//Found Type in Tree");
-                GenerateCode(finder.node, output);
-            }
-            else
-                output.WriteLine("Cannot find this Type in Syntax Tree");
+            PreProcess(type.Module);
+            var info = InfoUtil.Info(type);
+            GenerateCode(info.Declaration, output);
             /*AstBuilder codeDomBuilder = CreateAstBuilder(options, currentType: type);
             codeDomBuilder.AddType(type);
-            RunTransformsAndGenerateCode(codeDomBuilder, output, options);*/
-        }
-
-        void RunTransformsAndGenerateCode(AstBuilder astBuilder, ITextOutput output, DecompilationOptions options, IAstTransform additionalTransform = null)
-        {
-            astBuilder.RunTransformations(transformAbortCondition);
-            if (additionalTransform != null)
-            {
-                additionalTransform.Run(astBuilder.SyntaxTree);
-            }
-            if (options.DecompilerSettings.ShowXmlDocumentation)
-            {
-                AddXmlDocTransform.Run(astBuilder.SyntaxTree);
-            }
-            GenerateCode(astBuilder, output);
-        }
-
-        public static string GetPlatformDisplayName(ModuleDefinition module)
-        {
-            switch (module.Architecture)
-            {
-                case TargetArchitecture.I386:
-                    if ((module.Attributes & ModuleAttributes.Preferred32Bit) == ModuleAttributes.Preferred32Bit)
-                        return "AnyCPU (32-bit preferred)";
-                    else if ((module.Attributes & ModuleAttributes.Required32Bit) == ModuleAttributes.Required32Bit)
-                        return "x86";
-                    else
-                        return "AnyCPU (64-bit preferred)";
-                case TargetArchitecture.AMD64:
-                    return "x64";
-                case TargetArchitecture.IA64:
-                    return "Itanium";
-                default:
-                    return module.Architecture.ToString();
-            }
-        }
-
-        public static string GetPlatformName(ModuleDefinition module)
-        {
-            switch (module.Architecture)
-            {
-                case TargetArchitecture.I386:
-                    if ((module.Attributes & ModuleAttributes.Preferred32Bit) == ModuleAttributes.Preferred32Bit)
-                        return "AnyCPU";
-                    else if ((module.Attributes & ModuleAttributes.Required32Bit) == ModuleAttributes.Required32Bit)
-                        return "x86";
-                    else
-                        return "AnyCPU";
-                case TargetArchitecture.AMD64:
-                    return "x64";
-                case TargetArchitecture.IA64:
-                    return "Itanium";
-                default:
-                    return module.Architecture.ToString();
-            }
+            codeDomBuilder.RunTransformations(transformAbortCondition);
+            //RunTransformsAndGenerateCode(codeDomBuilder, output, options);
+            GenerateCplusplusCode(codeDomBuilder, output, OnlyIncludeNameSpace);*/
+            WriteHppCode(type, output);
+            WriteHxxCode(type, output);
+            WriteCppCode(type, output);
         }
 
         public override void DecompileAssembly(LoadedAssembly assembly, ITextOutput output, DecompilationOptions options)
         {
+            PreProcess(assembly.ModuleDefinition);
             if (options.FullDecompilation && options.SaveAsProjectDirectory != null)
             {
                 HashSet<string> directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var files = WriteCodeFilesInProject(assembly.ModuleDefinition, options, directories).ToList();
-                files.AddRange(WriteResourceFilesInProject(assembly, options, directories));
                 WriteProjectFile(new TextOutputWriter(output), files, assembly.ModuleDefinition);
             }
             else
             {
-                base.DecompileAssembly(assembly, output, options);
-                output.WriteLine();
+                //base.DecompileAssembly(assembly, output, options);
+                //output.WriteLine();
                 ModuleDefinition mainModule = assembly.ModuleDefinition;
-                if (mainModule.EntryPoint != null)
-                {
-                    output.Write("// Entry point: ");
-                    output.WriteReference(mainModule.EntryPoint.DeclaringType.FullName + "." + mainModule.EntryPoint.Name, mainModule.EntryPoint);
-                    output.WriteLine();
-                }
-                output.WriteLine("// Architecture: " + GetPlatformDisplayName(mainModule));
-                if ((mainModule.Attributes & ModuleAttributes.ILOnly) == 0)
-                {
-                    output.WriteLine("// This assembly contains unmanaged code.");
-                }
-                switch (mainModule.Runtime)
-                {
-                    case TargetRuntime.Net_1_0:
-                        output.WriteLine("// Runtime: .NET 1.0");
-                        break;
-                    case TargetRuntime.Net_1_1:
-                        output.WriteLine("// Runtime: .NET 1.1");
-                        break;
-                    case TargetRuntime.Net_2_0:
-                        output.WriteLine("// Runtime: .NET 2.0");
-                        break;
-                    case TargetRuntime.Net_4_0:
-                        output.WriteLine("// Runtime: .NET 4.0");
-                        break;
-                }
+                Helper.ShowUnResolvedFieldAndMethod(mainModule, output);
                 output.WriteLine();
 
                 // don't automatically load additional assemblies when an assembly node is selected in the tree view
-                using (options.FullDecompilation ? null : LoadedAssembly.DisableAssemblyLoad())
+                /*using (options.FullDecompilation ? null : LoadedAssembly.DisableAssemblyLoad())
                 {
-                    DecompileAllIfNeed(assembly.ModuleDefinition, options);
-                    //AstBuilder globalCodeDomBuilder = CreateAstBuilder(options, currentModule: assembly.ModuleDefinition);
-                    //globalCodeDomBuilder.AddAssembly(assembly.ModuleDefinition, onlyAssemblyLevel: false);
-                    //globalCodeDomBuilder.RunTransformations(transformAbortCondition);
-                    globalCodeDomBuilder.GenerateCode(output);
-                }
+                    AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: assembly.ModuleDefinition);
+                    codeDomBuilder.AddAssembly(assembly.ModuleDefinition, onlyAssemblyLevel: !options.FullDecompilation);
+                    codeDomBuilder.RunTransformations(transformAbortCondition);
+                    GenerateCSharpCode(codeDomBuilder, output);
+                }*/
             }
         }
 
+        public static bool IsNeedWriteHpp(TypeDefinition def, string @namespace = null)
+        {
+            if (def != null && (@namespace == null || (@namespace != null && def.Namespace == @namespace)))
+            {
+                if (isSkipClass(def))
+                    return false;
+                return true;
+            }
+            return false;
+        }
+
+        public static bool IsNeedWriteHxx(TypeDefinition def, string @namespace =null)
+        {
+            var info = InfoUtil.Info(def);
+            if (def != null && (@namespace == null || (@namespace != null && def.Namespace == @namespace)))
+            {
+                if (def.IsEnum || def.IsInterface || isSkipClass(def))
+                    return false;
+                if (def.Name == "EventType" || def.Name == "CurrencyId")
+                    return false;
+                if (info != null && !info.HasDerivedClass)
+                    return false;
+                return true;
+            }
+            return false;
+        }
+
+        public static bool IsNeedWriteCpp(TypeDefinition def, string @namespace =null)
+        {
+            if (def != null && (@namespace == null || (@namespace != null && def.Namespace == @namespace)))
+            {
+                if (def.IsEnum || def.IsInterface || isSkipClass(def))
+                    return false;
+                if (def.Name == "EventType")
+                    return false;
+                return true;
+            }
+            return false;
+        }
+        #endregion
         #region WriteProjectFile
         void WriteProjectFile(TextWriter writer, IEnumerable<Tuple<string, string>> files, ModuleDefinition module)
         {
-            const string ns = "http://schemas.microsoft.com/developer/msbuild/2003";
-            string platformName = GetPlatformName(module);
+            /*const string ns = "http://schemas.microsoft.com/developer/msbuild/2003";
             using (XmlTextWriter w = new XmlTextWriter(writer))
             {
                 w.Formatting = Formatting.Indented;
                 w.WriteStartDocument();
-                w.WriteStartElement("Project", ns);
-                w.WriteAttributeString("ToolsVersion", "4.0");
-                w.WriteAttributeString("DefaultTargets", "Build");
-
-                w.WriteStartElement("PropertyGroup");
-                w.WriteElementString("ProjectGuid", Guid.NewGuid().ToString("B").ToUpperInvariant());
-
-                w.WriteStartElement("Configuration");
-                w.WriteAttributeString("Condition", " '$(Configuration)' == '' ");
-                w.WriteValue("Debug");
-                w.WriteEndElement(); // </Configuration>
-
-                w.WriteStartElement("Platform");
-                w.WriteAttributeString("Condition", " '$(Platform)' == '' ");
-                w.WriteValue(platformName);
-                w.WriteEndElement(); // </Platform>
-
-                switch (module.Kind)
-                {
-                    case ModuleKind.Windows:
-                        w.WriteElementString("OutputType", "WinExe");
-                        break;
-                    case ModuleKind.Console:
-                        w.WriteElementString("OutputType", "Exe");
-                        break;
-                    default:
-                        w.WriteElementString("OutputType", "Library");
-                        break;
-                }
-
-                w.WriteElementString("AssemblyName", module.Assembly.Name.Name);
-                bool useTargetFrameworkAttribute = false;
-                var targetFrameworkAttribute = module.Assembly.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == "System.Runtime.Versioning.TargetFrameworkAttribute");
-                if (targetFrameworkAttribute != null && targetFrameworkAttribute.ConstructorArguments.Any())
-                {
-                    string frameworkName = (string)targetFrameworkAttribute.ConstructorArguments[0].Value;
-                    string[] frameworkParts = frameworkName.Split(',');
-                    string frameworkVersion = frameworkParts.FirstOrDefault(a => a.StartsWith("Version="));
-                    if (frameworkVersion != null)
-                    {
-                        w.WriteElementString("TargetFrameworkVersion", frameworkVersion.Substring("Version=".Length));
-                        useTargetFrameworkAttribute = true;
-                    }
-                    string frameworkProfile = frameworkParts.FirstOrDefault(a => a.StartsWith("Profile="));
-                    if (frameworkProfile != null)
-                        w.WriteElementString("TargetFrameworkProfile", frameworkProfile.Substring("Profile=".Length));
-                }
-                if (!useTargetFrameworkAttribute)
-                {
-                    switch (module.Runtime)
-                    {
-                        case TargetRuntime.Net_1_0:
-                            w.WriteElementString("TargetFrameworkVersion", "v1.0");
-                            break;
-                        case TargetRuntime.Net_1_1:
-                            w.WriteElementString("TargetFrameworkVersion", "v1.1");
-                            break;
-                        case TargetRuntime.Net_2_0:
-                            w.WriteElementString("TargetFrameworkVersion", "v2.0");
-                            // TODO: Detect when .NET 3.0/3.5 is required
-                            break;
-                        default:
-                            w.WriteElementString("TargetFrameworkVersion", "v4.0");
-                            break;
-                    }
-                }
-                w.WriteElementString("WarningLevel", "4");
-
-                w.WriteEndElement(); // </PropertyGroup>
-
-                w.WriteStartElement("PropertyGroup"); // platform-specific
-                w.WriteAttributeString("Condition", " '$(Platform)' == '" + platformName + "' ");
-                w.WriteElementString("PlatformTarget", platformName);
-                w.WriteEndElement(); // </PropertyGroup> (platform-specific)
-
-                w.WriteStartElement("PropertyGroup"); // Debug
-                w.WriteAttributeString("Condition", " '$(Configuration)' == 'Debug' ");
-                w.WriteElementString("OutputPath", "bin\\Debug\\");
-                w.WriteElementString("DebugSymbols", "true");
-                w.WriteElementString("DebugType", "full");
-                w.WriteElementString("Optimize", "false");
-                w.WriteEndElement(); // </PropertyGroup> (Debug)
-
-                w.WriteStartElement("PropertyGroup"); // Release
-                w.WriteAttributeString("Condition", " '$(Configuration)' == 'Release' ");
-                w.WriteElementString("OutputPath", "bin\\Release\\");
-                w.WriteElementString("DebugSymbols", "true");
-                w.WriteElementString("DebugType", "pdbonly");
-                w.WriteElementString("Optimize", "true");
-                w.WriteEndElement(); // </PropertyGroup> (Release)
-
-
-                w.WriteStartElement("ItemGroup"); // References
-                foreach (AssemblyNameReference r in module.AssemblyReferences)
-                {
-                    if (r.Name != "mscorlib")
-                    {
-                        w.WriteStartElement("Reference");
-                        w.WriteAttributeString("Include", r.Name);
-                        w.WriteEndElement();
-                    }
-                }
-                w.WriteEndElement(); // </ItemGroup> (References)
-
                 foreach (IGrouping<string, string> gr in (from f in files group f.Item2 by f.Item1 into g orderby g.Key select g))
                 {
                     w.WriteStartElement("ItemGroup");
@@ -714,7 +290,7 @@ namespace QuantKit
                 w.WriteEndElement();
 
                 w.WriteEndDocument();
-            }
+            }*/
         }
         #endregion
 
@@ -728,23 +304,17 @@ namespace QuantKit
             return true;
         }
 
-        IEnumerable<Tuple<string, string>> WriteAssemblyInfo(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories)
+        TypeDeclaration FindDeclaration(TypeDefinition t, AstBuilder builder)
         {
-            // don't automatically load additional assemblies when an assembly node is selected in the tree view
-            using (LoadedAssembly.DisableAssemblyLoad())
+            var syntaxTree = builder.SyntaxTree;
+            var decls = syntaxTree.Descendants.OfType<TypeDeclaration>().ToList();
+            foreach (var item in decls)
             {
-                AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
-                codeDomBuilder.AddAssembly(module, onlyAssemblyLevel: true);
-                codeDomBuilder.RunTransformations(transformAbortCondition);
-
-                string prop = "Properties";
-                if (directories.Add("Properties"))
-                    Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, prop));
-                string assemblyInfo = Path.Combine(prop, "AssemblyInfo" + this.FileExtension);
-                using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, assemblyInfo)))
-                    codeDomBuilder.GenerateCode(new PlainTextOutput(w));
-                return new Tuple<string, string>[] { Tuple.Create("Compile", assemblyInfo) };
+                var def = item.Annotation<TypeDefinition>();
+                if (def == t)
+                    return item;
             }
+            return null;
         }
 
         IEnumerable<Tuple<string, string>> WriteCodeFilesInProject(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories)
@@ -752,17 +322,21 @@ namespace QuantKit
             var files = module.Types.Where(t => IncludeTypeWhenDecompilingProject(t, options)).GroupBy(
                 delegate(TypeDefinition type)
                 {
-                    string file = ICSharpCode.ILSpy.TextView.DecompilerTextView.CleanUpName(type.Name) + this.FileExtension;
+                    string file = CleanUpName(type.Name);
                     if (string.IsNullOrEmpty(type.Namespace))
                     {
                         return file;
                     }
                     else
                     {
-                        string dir = ICSharpCode.ILSpy.TextView.DecompilerTextView.CleanUpName(type.Namespace);
-                        if (directories.Add(dir))
-                            Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, dir));
-                        return Path.Combine(dir, file);
+                        return file;
+                        /*string dir = CleanUpName(type.Namespace);
+                        if (OnlyIncludeNameSpace == null || OnlyIncludeNameSpace == type.Namespace)
+                        {
+                            if (directories.Add(dir))
+                                Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, dir));
+                        }*/
+                        //return Path.Combine(dir, file);
                     }
                 }, StringComparer.OrdinalIgnoreCase).ToList();
             AstMethodBodyBuilder.ClearUnhandledOpcodes();
@@ -771,111 +345,91 @@ namespace QuantKit
                 new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 delegate(IGrouping<string, TypeDefinition> file)
                 {
-                    using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
+                    var path = options.SaveAsProjectDirectory;
+                    var t = file.First<TypeDefinition>();
+                    string fname = file.Key;
+                    if (IsNeedWriteHpp(t, OnlyIncludeNameSpace))
+                    {
+                        var HppPath = Path.Combine(path, "include");
+                        HppPath = Path.Combine(HppPath, "QuantKit");
+                        Directory.CreateDirectory(HppPath);
+                        using (StreamWriter w = new StreamWriter(Path.Combine(HppPath, file.Key + HppFileExtension)))
+                        {
+/*                            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
+                            foreach (TypeDefinition type in file)
+                            {
+                                codeDomBuilder.AddType(type);
+                            }
+                            PreProcess(module);
+                            codeDomBuilder.RunTransformations(transformAbortCondition);*/
+                            //WriteHppCode(t, FindDeclaration(t, codeDomBuilder), new PlainTextOutput(w));
+                            WriteHppCode(t, new PlainTextOutput(w));
+                        }
+                    }
+
+                    if (IsNeedWriteHxx(t, OnlyIncludeNameSpace))
+                    {
+                        var HxxPath = Path.Combine(path, "src");
+                        Directory.CreateDirectory(HxxPath);
+                        using (StreamWriter w = new StreamWriter(Path.Combine(HxxPath, file.Key + HxxFileExtension)))
+                        {
+                            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
+                            foreach (TypeDefinition type in file)
+                            {
+                                codeDomBuilder.AddType(type);
+                            }
+                            PreProcess(module);
+                            codeDomBuilder.RunTransformations(transformAbortCondition);
+                            WriteHxxCode(t, new PlainTextOutput(w));
+                        }
+                    }
+                    if (IsNeedWriteCpp(t, OnlyIncludeNameSpace))
+                    {
+                        var CppPath = Path.Combine(path, "src");
+                        Directory.CreateDirectory(CppPath);
+                        using (StreamWriter w = new StreamWriter(Path.Combine(CppPath, file.Key + CppFileExtension)))
+                        {
+                            AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
+                            foreach (TypeDefinition type in file)
+                            {
+                                codeDomBuilder.AddType(type);
+                            }
+                            PreProcess(module);
+                            codeDomBuilder.RunTransformations(transformAbortCondition);
+                            WriteCppCode(t, new PlainTextOutput(w));
+                        }
+                    }
+                    /*using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
                     {
                         AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
                         foreach (TypeDefinition type in file)
                         {
                             codeDomBuilder.AddType(type);
                         }
+                        PreProcess(module);
                         codeDomBuilder.RunTransformations(transformAbortCondition);
-                        codeDomBuilder.GenerateCode(new PlainTextOutput(w));
-                    }
+                        GenerateCplusplusCode(codeDomBuilder, new PlainTextOutput(w), "SmartQuant");
+                    }*/
                 });
             AstMethodBodyBuilder.PrintNumberOfUnhandledOpcodes();
-            return files.Select(f => Tuple.Create("Compile", f.Key)).Concat(WriteAssemblyInfo(module, options, directories));
+            return files.Select(f => Tuple.Create("Compile", f.Key));
         }
         #endregion
 
-        #region WriteResourceFilesInProject
-        IEnumerable<Tuple<string, string>> WriteResourceFilesInProject(LoadedAssembly assembly, DecompilationOptions options, HashSet<string> directories)
+        #region Utils
+        internal static string CleanUpName(string text)
         {
-            //AppDomain bamlDecompilerAppDomain = null;
-            //try {
-            foreach (EmbeddedResource r in assembly.ModuleDefinition.Resources.OfType<EmbeddedResource>())
-            {
-                string fileName;
-                Stream s = r.GetResourceStream();
-                s.Position = 0;
-                if (r.Name.EndsWith(".g.resources", StringComparison.OrdinalIgnoreCase))
-                {
-                    IEnumerable<DictionaryEntry> rs = null;
-                    try
-                    {
-                        rs = new ResourceSet(s).Cast<DictionaryEntry>();
-                    }
-                    catch (ArgumentException)
-                    {
-                    }
-                    if (rs != null && rs.All(e => e.Value is Stream))
-                    {
-                        foreach (var pair in rs)
-                        {
-                            fileName = Path.Combine(((string)pair.Key).Split('/').Select(p => ICSharpCode.ILSpy.TextView.DecompilerTextView.CleanUpName(p)).ToArray());
-                            string dirName = Path.GetDirectoryName(fileName);
-                            if (!string.IsNullOrEmpty(dirName) && directories.Add(dirName))
-                            {
-                                Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, dirName));
-                            }
-                            Stream entryStream = (Stream)pair.Value;
-                            entryStream.Position = 0;
-                            if (fileName.EndsWith(".baml", StringComparison.OrdinalIgnoreCase))
-                            {
-                                //									MemoryStream ms = new MemoryStream();
-                                //									entryStream.CopyTo(ms);
-                                // TODO implement extension point
-                                //									var decompiler = Baml.BamlResourceEntryNode.CreateBamlDecompilerInAppDomain(ref bamlDecompilerAppDomain, assembly.FileName);
-                                //									string xaml = null;
-                                //									try {
-                                //										xaml = decompiler.DecompileBaml(ms, assembly.FileName, new ConnectMethodDecompiler(assembly), new AssemblyResolver(assembly));
-                                //									}
-                                //									catch (XamlXmlWriterException) { } // ignore XAML writer exceptions
-                                //									if (xaml != null) {
-                                //										File.WriteAllText(Path.Combine(options.SaveAsProjectDirectory, Path.ChangeExtension(fileName, ".xaml")), xaml);
-                                //										yield return Tuple.Create("Page", Path.ChangeExtension(fileName, ".xaml"));
-                                //										continue;
-                                //									}
-                            }
-                            using (FileStream fs = new FileStream(Path.Combine(options.SaveAsProjectDirectory, fileName), FileMode.Create, FileAccess.Write))
-                            {
-                                entryStream.CopyTo(fs);
-                            }
-                            yield return Tuple.Create("Resource", fileName);
-                        }
-                        continue;
-                    }
-                }
-                fileName = GetFileNameForResource(r.Name, directories);
-                using (FileStream fs = new FileStream(Path.Combine(options.SaveAsProjectDirectory, fileName), FileMode.Create, FileAccess.Write))
-                {
-                    s.CopyTo(fs);
-                }
-                yield return Tuple.Create("EmbeddedResource", fileName);
-            }
-            //}
-            //finally {
-            //    if (bamlDecompilerAppDomain != null)
-            //        AppDomain.Unload(bamlDecompilerAppDomain);
-            //}
+            int pos = text.IndexOf(':');
+            if (pos > 0)
+                text = text.Substring(0, pos);
+            pos = text.IndexOf('`');
+            if (pos > 0)
+                text = text.Substring(0, pos);
+            text = text.Trim();
+            foreach (char c in Path.GetInvalidFileNameChars())
+                text = text.Replace(c, '_');
+            return text;
         }
-
-        string GetFileNameForResource(string fullName, HashSet<string> directories)
-        {
-            string[] splitName = fullName.Split('.');
-            string fileName = ICSharpCode.ILSpy.TextView.DecompilerTextView.CleanUpName(fullName);
-            for (int i = splitName.Length - 1; i > 0; i--)
-            {
-                string ns = string.Join(".", splitName, 0, i);
-                if (directories.Contains(ns))
-                {
-                    string name = string.Join(".", splitName, i, splitName.Length - i);
-                    fileName = Path.Combine(ns, ICSharpCode.ILSpy.TextView.DecompilerTextView.CleanUpName(name));
-                    break;
-                }
-            }
-            return fileName;
-        }
-        #endregion
 
         AstBuilder CreateAstBuilder(DecompilationOptions options, ModuleDefinition currentModule = null, TypeDefinition currentType = null, bool isSingleMember = false)
         {
@@ -887,8 +441,6 @@ namespace QuantKit
                 settings = settings.Clone();
                 settings.UsingDeclarations = false;
             }
-
-
             return new AstBuilder(
                 new DecompilerContext(currentModule)
                 {
@@ -924,7 +476,7 @@ namespace QuantKit
                     ((ComposedType)astType).PointerRank--;
             }
 
-            astType.AcceptVisitor(new CppOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
+            astType.AcceptVisitor(new CSharpOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
             return w.ToString();
         }
 
@@ -1008,11 +560,13 @@ namespace QuantKit
                     attribute.Remove();
 
                 StringWriter w = new StringWriter();
-                b.GenerateCode(new PlainTextOutput(w));
+                b.SyntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
+                GenerateCode(b.SyntaxTree, new PlainTextOutput(w));
                 return Regex.Replace(w.ToString(), @"\s+", " ").TrimEnd();
             }
 
             return base.GetTooltip(member);
         }
+        #endregion
     }
 }
