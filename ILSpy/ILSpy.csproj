@@ -120,14 +120,16 @@
     <Compile Include="CreateListDialog.xaml.cs">
       <DependentUpon>CreateListDialog.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Languages\QAstUtil.cs" />
+    <Compile Include="Languages\Cpp.cs" />
+    <Compile Include="Languages\CppOutoutVisitor.cs" />
+    <Compile Include="Languages\Cxx.cs" />
+    <Compile Include="Languages\Helper.cs" />
+    <Compile Include="Languages\Hpp.cs" />
+    <Compile Include="Languages\Hxx.cs" />
+    <Compile Include="Languages\Info.cs" />
     <Compile Include="Languages\CodeXmlLanguage.cs" />
     <Compile Include="Languages\CodeXmlOutputVisitor.cs" />
-    <Compile Include="Languages\QAstLanguage.cs" />
-    <Compile Include="Languages\QAstWrite.cs" />
     <Compile Include="Languages\CppLanguage.cs" />
-    <Compile Include="Languages\CppOutputVisitor.cs" />
-    <Compile Include="Languages\CppTransform.cs" />
     <Compile Include="Languages\CppUtil.cs" />
     <Compile Include="Languages\CSharpLanguage.cs" />
     <Compile Include="DecompilationOptions.cs" />
@@ -149,8 +151,8 @@
     <Compile Include="Languages\Language.cs" />
     <Compile Include="Images\Images.cs" />
     <Compile Include="Languages\Languages.cs" />
-    <Compile Include="Languages\QAst.cs" />
-    <Compile Include="Languages\QSyntaxTree.cs" />
+    <Compile Include="Languages\RenameUtil.cs" />
+    <Compile Include="Languages\Util.cs" />
     <Compile Include="LoadedAssembly.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="NavigationHistory.cs" />

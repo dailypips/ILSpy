@@ -144,6 +144,8 @@ namespace QuantKit
             List<string> elist = new List<string>();
             List<string> mlist = new List<string>();
             List<string> clist = new List<string>();
+
+            var info = InfoUtil.Info(def);
             bool hasBaseType = def.BaseType != null && def.BaseType.Name != "Object";
             if (hasBaseType)
                 mlist.Add(def.BaseType.Name); // basetype must be include file
@@ -151,13 +153,15 @@ namespace QuantKit
             {
                 foreach (var i in def.Interfaces)
                 {
+                    if (i.Namespace != def.Namespace)
+                        continue;
                     if (i.Module == def.Module)
                         mlist.Add(i.Name);
                     else
                         elist.Add(i.Name);
                 }
             }
-            foreach (var m in def.Methods)
+            foreach (var m in info.Methods)
             {
                 Util.AddInclude(def.Namespace, m.ReturnType, elist, clist, mlist);
                 foreach (var p in m.Parameters)
@@ -236,23 +240,29 @@ namespace QuantKit
             bool isValueType;
             output.Write("class QUANTKIT_EXPORT " + Util.TypeString(def, out isValueType));
             bool hasBaseType = def.BaseType != null && def.BaseType.Name != "Object";
-            if (hasBaseType || def.HasInterfaces)
+            var info = InfoUtil.Info(def);
+            if (hasBaseType || info.HasInterfaces)
             {
                 bool isFirst = true;
-                output.Write(" : public ");
                 if (hasBaseType)
                 {
+                    output.Write(" : public ");
                     output.Write(def.BaseType.Name);
                     isFirst = false;
                 }
 
-                foreach (var item in def.Interfaces)
+                foreach (var item in info.Interfaces)
                 {
+                    //if (item.Namespace != def.Namespace)
+                    //    continue;
                     if (!isFirst)
                         output.Write(" , public ");
                     else
+                    {
+                        output.Write(" : public ");
                         isFirst = false;
-                    output.Write(Util.TypeString(item, out isValueType));
+                    }
+                    output.Write(Util.TypeString(item.def, out isValueType));
                 }
             }
         }
@@ -326,12 +336,15 @@ namespace QuantKit
             return false;
         }
 
-        static void ConvertToSection(TypeDefinition def, List<MethodDefinition> ctorSections, List<MethodDefinition> pulicSections, List<MethodDefinition> protectedSection, List<MethodDefinition> privateSection)
+        static void ConvertToSection(TypeDefinition def, List<MethodInfo> ctorSections, List<MethodInfo> pulicSections, List<MethodInfo> protectedSection, List<MethodInfo> privateSection)
         {
-            List<MethodDefinition> ctors = new List<MethodDefinition>();
-            List<MethodDefinition> props = new List<MethodDefinition>();
-            List<MethodDefinition> others = new List<MethodDefinition>();
-            foreach (var m in def.Methods)
+            List<MethodInfo> ctors = new List<MethodInfo>();
+            List<MethodInfo> props = new List<MethodInfo>();
+            List<MethodInfo> others = new List<MethodInfo>();
+
+            var info = InfoUtil.Info(def);
+
+            foreach (var m in info.Methods)
             {
                 if (m.IsConstructor)
                     ctors.Add(m);
@@ -347,7 +360,7 @@ namespace QuantKit
 
             foreach (var m in props)
             {
-                var modifiers = Util.ConvertModifiers(m);
+                var modifiers = Util.ConvertModifiers(m.def);
                 if (modifiers.HasFlag(Modifiers.Public))
                     pulicSections.Add(m);
                 else
@@ -361,7 +374,7 @@ namespace QuantKit
 
             foreach (var m in others.OrderBy(x => x.Name).ToList())
             {
-                var modifiers = Util.ConvertModifiers(m);
+                var modifiers = Util.ConvertModifiers(m.def);
                 if (modifiers.HasFlag(Modifiers.Public))
                     pulicSections.Add(m);
                 else
@@ -429,10 +442,12 @@ namespace QuantKit
                 return;
             }
 
-            List<MethodDefinition> ctorSections = new List<MethodDefinition>();
-            List<MethodDefinition> publicSections = new List<MethodDefinition>();
-            List<MethodDefinition> protectedSection = new List<MethodDefinition>();
-            List<MethodDefinition> privateSection = new List<MethodDefinition>();
+            var tinfo = InfoUtil.Info(def);
+
+            List<MethodInfo> ctorSections = new List<MethodInfo>();
+            List<MethodInfo> publicSections = new List<MethodInfo>();
+            List<MethodInfo> protectedSection = new List<MethodInfo>();
+            List<MethodInfo> privateSection = new List<MethodInfo>();
 
             ConvertToSection(def, ctorSections, publicSections, protectedSection, privateSection);
 
@@ -451,14 +466,14 @@ namespace QuantKit
                 output.WriteLine("public:");
                 output.Indent();
 
-                var tinfo = InfoUtil.Info(def);
+
                 //if (tinfo != null && tinfo.NullConstructor == null)
                 //    WriteDefaultNullConstructor(def, output);
                 if (tinfo != null && tinfo.CopyConstructor == null)
                     WriteDefaultCopyConstructor(def, output);
                 foreach (var m in ctorSections)
                 {
-                    WriteMethod(m, output);
+                    WriteMethod(m.def, output);
                 }
                 WriteAddCppMethod(def, output);
                 output.Unindent();
@@ -507,7 +522,7 @@ namespace QuantKit
 
                 foreach (var m in publicSections)
                 {
-                    WriteMethod(m, output);
+                    WriteMethod(m.def, output);
                 }
                 output.Unindent();
                 //if (protectedSection.Count() > 0 || privateSection.Count() > 0)

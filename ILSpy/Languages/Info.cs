@@ -293,6 +293,38 @@ namespace QuantKit
             }
         }
 
+        public TypeReference ReturnType
+        {
+            get
+            {
+                return this.def.ReturnType;
+            }
+        }
+        public bool IsConstructor
+        {
+            get { return this.def.IsConstructor; }
+        }
+
+        public bool IsGetter
+        {
+            get { return this.def.IsGetter; }
+        }
+        public Collection<ParameterDefinition> Parameters
+        {
+            get { return this.def.Parameters; }
+        }
+        public bool IsSetter
+        {
+            get { return this.def.IsSetter; }
+        }
+        public bool isAddOn
+        {
+            get { return this.def.IsAddOn; }
+        }
+        public bool isRemoveOn
+        {
+            get { return this.isRemoveOn; }
+        }
         public bool isNullConstructor
         {
             get
@@ -657,6 +689,8 @@ namespace QuantKit
         public Modifiers modifiers;
         public List<TypeDefinition> DerivedClasses = new List<TypeDefinition>();
         AstNode decl = null;
+        List<ClassInfo> interfaces = null;
+        List<MethodInfo> methods = null;
         
         public bool IsEnum
         {
@@ -670,14 +704,72 @@ namespace QuantKit
         {
             get { return !this.def.IsEnum; }
         }
-        /*public bool HasInterfaces
+        public bool HasInterfaces
         {
-            get { return this.def.HasInterfaces; }
+            get { 
+                var i = this.Interfaces;
+                if (i.Count() > 0)
+                    return true;
+                else
+                    return false;
+            }
         }
-        public Collection<TypeReference> Interfaces
+
+        public List<MethodInfo> Methods
         {
-            get { return this.def.Interfaces; }
-        }*/
+            get
+            {
+                if (methods == null)
+                {
+                    this.methods = new List<MethodInfo>();
+                    foreach (var m in def.Methods)
+                    {
+                        var info = InfoUtil.Info(m);
+                        this.methods.Add(info);
+                    }
+                    foreach (var item in def.Interfaces)
+                    {
+                        switch (item.FullName)
+                        {
+                            case "System.Collections.ICollection":
+                                this.methods.RemoveAll(x => x.def.Name == "CopyTo");
+                                this.methods.RemoveAll(x => x.def.Name == "get_IsSynchronized");
+                                this.methods.RemoveAll(x => x.def.Name == "get_SyncRoot");
+                                this.methods.RemoveAll(x => x.def.Name == "get_Count");
+                                break;
+                            case "System.Collections.IEnumerable":
+                                this.methods.RemoveAll(x => x.def.Name == "GetEnumerator");
+                                break;
+                            case "System.IDisposable":
+                                this.methods.RemoveAll(x => x.def.Name == "Dispose");
+                                break;
+                        }
+                    }
+                }
+                return this.methods;
+            }
+        }
+
+        public List<ClassInfo> Interfaces
+        {
+            get {
+                if (this.interfaces == null)
+                {
+                    this.interfaces = new List<ClassInfo>();
+                    foreach (var item in def.Interfaces)
+                    {
+                        if (item.Namespace == def.Namespace)
+                        {
+                            var i = item as TypeDefinition;
+                            var info = InfoUtil.Info(i);
+                            this.interfaces.Add(info);
+                        }
+
+                    }
+                }
+                return this.interfaces;
+            }
+        }
         public string Name
         {
             get { return this.def.Name; }
