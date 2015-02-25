@@ -36,7 +36,7 @@ namespace QuantKit
                     return this.reference.IsPrimitive;
             }
         }
-        public bool isGenesisType
+        public bool IsGenericType
         {
             get
             {
