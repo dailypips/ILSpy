@@ -115,12 +115,12 @@ namespace QuantKit
                 Console.WriteLine("Verify Error");
         }
 
-        public void post()
+        internal void post()
         {
 
         }
 
-        public void invalidCache()
+        internal void inValidCache()
         {
             this.decl = null;
         }
@@ -159,12 +159,12 @@ namespace QuantKit
             this.def = p;
         }
 
-        public void post()
+        internal void post()
         {
 
         }
 
-        public void invalidCache()
+        internal void inValidCache()
         {
             this.decl = null;
         }
@@ -194,11 +194,11 @@ namespace QuantKit
         {
             this.def = def;
         }
-        public void post()
+        internal void post()
         {
         }
 
-        public void invalidCache()
+        internal void inValidCache()
         {
             this.decl = null;
         }
@@ -640,12 +640,12 @@ namespace QuantKit
                 }
             }
         }
-        public void post()
+        internal void post()
         {
             RenameParametersName();
         }
 
-        public void invalidCache()
+        internal void inValidCache()
         {
             this.decl = null;
             this.method_body = null;
@@ -798,7 +798,7 @@ namespace QuantKit
             }
         }
 
-        public void post()
+        internal void post()
         {
             foreach (var t in this.def.Module.Types)
             {
@@ -834,32 +834,32 @@ namespace QuantKit
                     info.post();
             }
         }
-        public void invalidCache()
+        internal void inValidCache()
         {
             foreach (var f in this.def.Fields)
             {
                 FieldInfo info = InfoUtil.Info(f);
                 if (info != null)
-                    info.invalidCache();
+                    info.inValidCache();
             }
             foreach (var p in this.def.Properties)
             {
                 PropertyInfo info = InfoUtil.Info(p);
                 if (info != null)
-                    info.invalidCache();
+                    info.inValidCache();
             }
 
             foreach (var m in this.def.Methods)
             {
                 var info = InfoUtil.Info(m);
                 if (info != null)
-                    info.invalidCache();
+                    info.inValidCache();
             }
             foreach (var e in this.def.Events)
             {
                 var info = InfoUtil.Info(e);
                 if (info != null)
-                    info.invalidCache();
+                    info.inValidCache();
             }
             this.decl = null;
         }
@@ -879,7 +879,7 @@ namespace QuantKit
             InfoUtil.ScanCode(this.Module);
         }
 
-        public void post()
+        internal void post()
         {
             ScanCode();
             foreach (var t in Module.Types)
@@ -889,13 +889,13 @@ namespace QuantKit
                     info.post();
             }
         }
-        public void inValidCache()
+        internal void inValidCache()
         {
             foreach (var t in Module.Types)
             {
                 var info = InfoUtil.Info(t);
                 if (info != null)
-                    info.invalidCache();
+                    info.inValidCache();
             }
         }
     }
