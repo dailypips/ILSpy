@@ -91,7 +91,7 @@ namespace QuantKit
             node.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
         }
         #region C++
-        static bool isSkipClass(TypeDefinition def)
+        /*static bool isSkipClass(TypeDefinition def)
         {
             var dsdef = Util.GetTypeDefinition(def.Module, "ObjectStreamer");
             bool isInhertFromObjectStreamer = dsdef != null && Util.isInhertFrom(def, dsdef);
@@ -100,12 +100,13 @@ namespace QuantKit
                 return true;
             else
                 return false;
-        }
+        }*/
 
         void WriteCppCode(TypeDefinition def, ITextOutput output)
         {
             if (!IsNeedWriteCpp(def))
                 return;
+            var info = InfoUtil.Info(def);
             if (def.Name == "CurrencyId")
                 Helper.WriteCurrencyIdCode(def, output);
             else
@@ -113,17 +114,10 @@ namespace QuantKit
                 Cpp.WriteClass(def, output);
             }
         }
-        /*void WriteCxxCode(TypeDefinition def, TypeDeclaration decl, ITextOutput output)
-        {
-            if (def.IsEnum || def.IsInterface || isSkipClass(def))
-                return;
-            if (def.Name == "EventType" || def.Name == "CurrencyId")
-                return;
-            if (!def.IsEnum && !def.IsInterface)
-                Cxx.WriteClass(def, decl, output);
-        }*/
+
         void WriteHxxCode(TypeDefinition def, ITextOutput output)
         {
+            var info = InfoUtil.Info(def);
             if (!IsNeedWriteHxx(def))
                 return;
             Hxx.WriteClass(def, output);
@@ -228,9 +222,13 @@ namespace QuantKit
 
         public static bool IsNeedWriteHpp(TypeDefinition def, string @namespace = null)
         {
+            var info = InfoUtil.Info(def);
+            if (info == null)
+                return false;
+
             if (def != null && (@namespace == null || (@namespace != null && def.Namespace == @namespace)))
             {
-                if (isSkipClass(def))
+                if (info.isSkipClass)
                     return false;
                 return true;
             }
@@ -240,11 +238,12 @@ namespace QuantKit
         public static bool IsNeedWriteHxx(TypeDefinition def, string @namespace =null)
         {
             var info = InfoUtil.Info(def);
+            if (info == null)
+                return false;
+
             if (def != null && (@namespace == null || (@namespace != null && def.Namespace == @namespace)))
             {
-                if (def.IsEnum || def.IsInterface || isSkipClass(def))
-                    return false;
-                if (def.Name == "EventType" || def.Name == "CurrencyId")
+                if (def.IsInterface || info.isSkipClass || info.IsValueType)
                     return false;
                 if (info != null && !info.HasDerivedClass)
                     return false;
@@ -255,9 +254,14 @@ namespace QuantKit
 
         public static bool IsNeedWriteCpp(TypeDefinition def, string @namespace =null)
         {
+
+            var info = InfoUtil.Info(def);
+            if (info == null)
+                return false;
+
             if (def != null && (@namespace == null || (@namespace != null && def.Namespace == @namespace)))
             {
-                if (def.IsEnum || def.IsInterface || isSkipClass(def))
+                if (def.IsEnum || def.IsInterface || info.isSkipClass)
                     return false;
                 if (def.Name == "EventType")
                     return false;
@@ -348,11 +352,13 @@ namespace QuantKit
                 {
                     var path = options.SaveAsProjectDirectory;
                     var t = file.First<TypeDefinition>();
+                    var info = InfoUtil.Info(t);
                     string fname = file.Key;
                     if (IsNeedWriteHpp(t, OnlyIncludeNameSpace))
                     {
                         var HppPath = Path.Combine(path, "include");
                         HppPath = Path.Combine(HppPath, "QuantKit");
+                        HppPath = info.AddPath(HppPath);
                         Directory.CreateDirectory(HppPath);
                         using (StreamWriter w = new StreamWriter(Path.Combine(HppPath, file.Key + HppFileExtension)))
                         {
@@ -387,6 +393,7 @@ namespace QuantKit
                     if (IsNeedWriteCpp(t, OnlyIncludeNameSpace))
                     {
                         var CppPath = Path.Combine(path, "src");
+                        CppPath = info.AddPath(CppPath);
                         Directory.CreateDirectory(CppPath);
                         using (StreamWriter w = new StreamWriter(Path.Combine(CppPath, file.Key + CppFileExtension)))
                         {

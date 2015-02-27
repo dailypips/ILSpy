@@ -48,6 +48,14 @@ namespace QuantKit
         {
             bool isValueType;
             bool isFirst = true;
+            var info = InfoUtil.Info(def);
+            bool isCopyContructor = info.isCopyConstructor;
+            if (isCopyContructor)
+            {
+                var cinfo = info.DeclaringType;
+                output.Write("const " + cinfo.PrivateName + " &"+def.Parameters[0].Name);
+                return;
+            }
             foreach (var p in def.Parameters)
             {
                 if (isFirst)
@@ -168,6 +176,7 @@ namespace QuantKit
             }
 
         }*/
+
         static void WriteMethod(MethodDefinition m, ITextOutput output)
         {
             if (m.IsConstructor && m.IsStatic)
@@ -176,6 +185,7 @@ namespace QuantKit
                 return;
 
             var info = InfoUtil.Info(m);
+
             WriteMethodHead(m, output, true);
             if (m.IsGetter)
                 output.Write(" const");
@@ -186,9 +196,8 @@ namespace QuantKit
             if (info.Name == "getTypeId")
             {
                 output.Indent();
-                string rvalue;
                 if (m.Name == "get_TypeId")
-                    rvalue = "EventType::" + m.DeclaringType.Name;
+                    output.WriteLine(" return EventType::" + m.DeclaringType.Name +";");
                 output.Unindent();
             }
             else
@@ -212,16 +221,36 @@ namespace QuantKit
             output.WriteLine("}");
         }
 
-        static void WriteCtor(MethodDefinition m, ITextOutput output)
+        static bool isSpecial_DataObject(MethodDefinition m)
         {
-            if (m.IsConstructor && m.IsStatic)
-                return;
-            if (m.DeclaringType != null && m.DeclaringType.IsInterface)
-                return;
-
             var info = InfoUtil.Info(m);
-            WriteMethodHead(m, output, true);
-            output.WriteLine();
+            if (info.DeclaringType.Name == "DataObject" && info.Parameters.Count() == 1 && info.Parameters[0].Name == "dateTime")
+                return true;
+            return false;
+        }
+
+        static void WriteCtorBody(MethodDefinition m , ITextOutput output)
+        {
+            if (isSpecial_DataObject(m))
+            {
+                return;
+            }
+            var info = InfoUtil.Info(m);
+            output.Indent();
+            foreach (var s in info.MethodBody)
+                output.WriteLine(s);
+            output.Unindent();
+        }
+        static void WriteCtorInitBody(MethodDefinition m , ITextOutput output)
+        {
+            var info = InfoUtil.Info(m);
+            if (isSpecial_DataObject(m))
+            {
+                output.Indent();
+                output.WriteLine(": EventPrivate(dataTime)");
+                output.Unindent();
+                return;
+            }
             var clist = info.CtorInitBody;
             if (clist.Count() > 0)
             {
@@ -230,6 +259,20 @@ namespace QuantKit
                     output.WriteLine(s);
                 output.Unindent();
             }
+        }
+        static void WriteCtor(MethodDefinition m, ITextOutput output)
+        {
+            if (m.IsConstructor && m.IsStatic)
+                return;
+            if (m.DeclaringType != null && m.DeclaringType.IsInterface)
+                return;
+
+            var info = InfoUtil.Info(m);
+            if (info.isCopyConstructor)
+                return;
+            WriteMethodHead(m, output, true);
+            output.WriteLine();
+            WriteCtorInitBody(m, output);
             output.WriteLine("{");
             // special process getTypeId
 
@@ -243,10 +286,7 @@ namespace QuantKit
             }
             else
             {
-                output.Indent();
-                foreach (var s in info.MethodBody)
-                    output.WriteLine(s);
-                output.Unindent();
+                WriteCtorBody(m, output);
             }
             output.WriteLine("}");
         }
@@ -281,17 +321,36 @@ namespace QuantKit
         {
             if (def.IsInterface)
                 return;
-            output.WriteLine(def.Name + "Private::~" + def.Name + "()");
+            var info = InfoUtil.Info(def);
+            output.WriteLine(def.Name + "Private::~" + def.Name + "Private ()");
             output.WriteLine("{");
             output.WriteLine("}");
             output.WriteLine();
-            output.WriteLine(def.Name + "Private::" +def.Name + "Private &operator=(const " + def.Name + " &)");
-            output.WriteLine("{");
-            output.WriteLine("}");
-            output.WriteLine();
-            output.WriteLine("bool " + def.Name + "Private::operator==(const " + def.Name + " &other) const");
-            output.WriteLine("{");
-            output.WriteLine("}");
+            if (def.Fields.Count() > 0)
+            {
+                output.WriteLine("bool " + def.Name + "Private::operator==(const " + def.Name + " &other) const");
+                output.WriteLine("{");
+                output.Indent();
+                if (info.IsBaseClassInModule)
+                    output.Write("return ");
+                else
+                    output.WriteLine("return base::operator==(other) &&");
+                    
+                for (int i = 0; i < def.Fields.Count(); ++i )
+                {
+                    var f = def.Fields[i];
+                     output.Write( f.Name + " == other." + f.Name);
+                     if (i == def.Fields.Count() - 1)
+                         output.WriteLine(";");
+                     else
+                         output.WriteLine();
+                    if (i < def.Fields.Count() - 1)
+                        output.Write("&& ");
+                    
+                }
+                output.Unindent();
+                output.WriteLine("}");
+            }
         }
 
         static bool hasChildClass(TypeDefinition def)

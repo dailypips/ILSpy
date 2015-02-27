@@ -363,6 +363,17 @@ namespace QuantKit
             if (def.DeclaringType != null && def.DeclaringType.IsInterface)
                 return;
 
+            var info = InfoUtil.Info(def);
+            if (info.isCopyConstructor)
+            {
+                /*output.WriteLine(def.DeclaringType.Name + "::" + def.DeclaringType.Name + "(const " +def.DeclaringType.Name +" &other)");
+                output.Indent();
+                output.WriteLine(": " + info.DeclaringType.BaseTypeInModule.Name + " (other)");
+                output.Unindent();
+                output.WriteLine("{");
+                output.WriteLine("}");*/
+                return;
+            }
             output.Write(def.DeclaringType.Name + "::" + def.DeclaringType.Name);
 
             output.Write("(");
@@ -581,10 +592,13 @@ namespace QuantKit
         {
             if (def.IsInterface || Helper.isClassAsEnum(def))
                 return;
-            output.WriteLine("#include <QuantKit/" + def.Name + ".h>");
+            var info = InfoUtil.Info(def);
+
+            output.WriteLine("#include <QuantKit/" + info.IncludeName + ".h>");
+
             output.WriteLine();
             WriteIncludeBody(def, output);
-            var info = InfoUtil.Info(def);
+
             bool isFinalClass = info != null && !info.HasDerivedClass;
             if (!CppLanguage.IsNeedWriteHxx(def))
             {

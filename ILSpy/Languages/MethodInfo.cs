@@ -92,7 +92,7 @@ namespace QuantKit
                     this.parameters = new List<ParameterInfo>();
                     foreach (var p in this.def.Parameters)
                     {
-                        var pinfo = new ParameterInfo(p);
+                        var pinfo = new ParameterInfo(this, p);
                         this.parameters.Add(pinfo);
                     }
                 }
@@ -258,6 +258,7 @@ namespace QuantKit
         void special_init()
         {
             List<CtorInitInfo> ctorInitList = new List<CtorInitInfo>();
+
             // is sample member init
             foreach (var minit in this.method_body)
             {

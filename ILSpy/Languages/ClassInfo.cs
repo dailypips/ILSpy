@@ -3,6 +3,7 @@ using Mono.Cecil;
 using Mono.Collections.Generic;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -13,9 +14,11 @@ namespace QuantKit
         public TypeDefinition def;
         public Modifiers modifiers;
         public List<TypeDefinition> DerivedClasses = new List<TypeDefinition>();
+        TypeInfo base_type = null;
         AstNode decl = null;
         List<ClassInfo> interfaces = null;
         List<MethodInfo> methods = null;
+        List<TypeInfo> typeinfos = null;
 
         public string FullName
         {
@@ -39,13 +42,60 @@ namespace QuantKit
             }
             return false;
         }
+        public string AddPath(string path)
+        {
+           /* if (isDerivedClass && isInhertFrom("Event") && def.Name != "DataObject")
+            {
+                return Path.Combine(path, "Event");
+            }
+            if (isDerivedClass && !HasDerivedClass && isInhertFrom("ObjectStreamer"))
+                return Path.Combine(path, "Stream");*/
+            return path;
+        }
+        public string IncludeName
+        {
+            get
+            {
+               /* if (isDerivedClass && isInhertFrom("Event") && def.Name != "DataObject")
+                    return "Event/" + def.Name;
+                if (isDerivedClass && !HasDerivedClass && isInhertFrom("ObjectStreamer"))
+                    return "Stream/" + def.Name;*/
+                return def.Name;
+            }
+        }
+
+        public bool isInhertFrom(string name)
+        {
+            var d = InfoUtil.Info(name);
+            return isInhertFrom(d);
+        }
+        public bool isSkipClass
+        {
+            get
+            {
+                bool isInhertFromEventArgs = Util.isInhertFrom(def, "System.EventArgs");
+                //var objectStreamerDefinition = Util.GetTypeDefinition("ObjectStreamer");
+                //bool isInhertFromObjectStreamer= Util.isInhertFrom(this.def, objectStreamerDefinition);
+                if (def.Name == "DataObjectType" || isInhertFromEventArgs || def.Name.Contains("`") )//|| isInhertFromObjectStreamer)
+                    return true;
+                else return false;
+            }
+        }
         public bool isInhertFrom(ClassInfo @base)
         {
             return isInhertFrom(@base.def);
         }
+
+        public bool isClassAsEnum
+        {
+            get
+            {
+                return this.def.Name == "EventType" || this.def.Name == "CurrencyId";
+            }
+        }
         public bool IsValueType
         {
-            get { return this.def.IsEnum || this.def.Name == "EventType" || this.def.Name == "CurrencyId"; }
+            get { return this.def.IsEnum || isClassAsEnum; }
         }
         public bool IsEnum
         {
@@ -109,6 +159,32 @@ namespace QuantKit
             }
         }
 
+        public List<TypeInfo> TypeInfos
+        {
+            get
+            {
+                if (this.typeinfos == null)
+                {
+                    var result = new List<TypeInfo>();
+                    
+                    if (BaseType != null)
+                        typeinfos.Add(BaseType);
+
+                    foreach (var f in Fields)
+                    {
+                        typeinfos.Add(new TypeInfo(f.FieldType));
+                    }
+                    foreach (var m in Methods)
+                    {
+                        foreach (var p in m.def.Parameters)
+                        {
+                            typeinfos.Add(new TypeInfo(p.ParameterType));
+                        }
+                    }
+                }
+                return typeinfos;
+            }
+        }
         public List<ClassInfo> Interfaces
         {
             get
@@ -192,6 +268,8 @@ namespace QuantKit
                 return decl;
             }
         }
+
+
         public bool IsBaseClassInModule
         {
             get
@@ -225,6 +303,34 @@ namespace QuantKit
             }
         }
 
+        public string PrivateNamespace
+        {
+            get
+            {
+                return string.Empty;
+            }
+        }
+        public string PrivateFullName
+        {
+            get
+            {
+                return PrivateName;
+            }
+        }
+        public string PrivateName
+        {
+            get
+            {
+                return Name + "Private";
+            }
+        }
+        public TypeInfo BaseType
+        {
+            get
+            {
+                return this.base_type;
+            }
+        }
         public TypeDefinition BaseTypeInModule
         {
             get
@@ -314,6 +420,7 @@ namespace QuantKit
                     info.inValidCache();
             }
             this.decl = null;
+            typeinfos = null;
         }
     }
 }

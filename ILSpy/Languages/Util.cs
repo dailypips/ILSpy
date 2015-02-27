@@ -247,6 +247,8 @@ namespace QuantKit
                     break;
                 case MetadataType.Class:
                     var cname = ReplaceGenericType(typeRef.Name);
+                    if (cname == "BinaryReader" || cname == "BinaryWriter")
+                        cname = "QByteArray";
                     var def = typeRef.Resolve();
                     if (typeRef.Namespace == module)
                     {
@@ -440,6 +442,8 @@ namespace QuantKit
                 case MetadataType.Class:
                     isValueType = false;
                     var cname = ReplaceGenericType(typeRef.Name);
+                    if (cname == "BinaryReader" || cname == "BinaryWriter")
+                        cname = "QByteArray";
                     return cname;
                 case MetadataType.Object:
                     isValueType = false;
@@ -949,6 +953,16 @@ namespace QuantKit
 
         #endregion
 
+        public static TypeDefinition GetTypeDefinition(string name)
+        {
+            foreach (var module in InfoUtil.ModuleInfoDict.Keys)
+            {
+                var def = GetTypeDefinition(module, name);
+                if (def != null)
+                    return def;
+            }
+            return null;
+        }
         public static TypeDefinition GetTypeDefinition(ModuleDefinition module, string name)
         {
             foreach (var t in module.Types)

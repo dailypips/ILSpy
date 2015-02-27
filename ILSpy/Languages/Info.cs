@@ -42,6 +42,15 @@ namespace QuantKit
                 return ClassInfoDict[def];
             return null;
         }
+        public static ClassInfo Info(string name)
+        {
+            foreach (var d in ClassInfoDict.Keys)
+            {
+                if (d.Name == name)
+                    return ClassInfoDict[d];
+            }
+            return null;
+        }
         public static ModuleInfo Info(ModuleDefinition def)
         {
             if (def == null) return null;
@@ -63,7 +72,7 @@ namespace QuantKit
         static Dictionary<MethodDefinition, MethodInfo> MethodInfoDict = new Dictionary<MethodDefinition, MethodInfo>();
         static Dictionary<EventDefinition, EventInfo> EventInfoDict = new Dictionary<EventDefinition, EventInfo>();
         static Dictionary<TypeDefinition, ClassInfo> ClassInfoDict = new Dictionary<TypeDefinition, ClassInfo>();
-        static Dictionary<ModuleDefinition, ModuleInfo> ModuleInfoDict = new Dictionary<ModuleDefinition, ModuleInfo>();
+        public static Dictionary<ModuleDefinition, ModuleInfo> ModuleInfoDict = new Dictionary<ModuleDefinition, ModuleInfo>();
 
         public static void BuildModuleDict(ModuleDefinition module)
         {

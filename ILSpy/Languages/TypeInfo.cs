@@ -8,11 +8,14 @@ namespace QuantKit
 {
     public class TypeInfo
     {
-        TypeReference reference;
-        bool is_genesis_type = false;
-        bool is_external_type = false;
-        bool isValueType = false;
-        string typename;
+        internal TypeReference reference;
+
+        internal bool is_genesis_type = false;
+        internal bool is_external_type = false;
+        internal bool is_value_type = false;
+        internal string typename;
+        //internal static Dictionary<TypeDefinition, TypeInfo> moduleTypeInfo = new Dictionary<TypeDefinition, TypeInfo>();
+
         public TypeInfo(TypeReference reference)
         {
             this.reference = reference;
@@ -21,10 +24,28 @@ namespace QuantKit
         {
             this.reference = def;
         }
+
         public TypeInfo(string typename)
         {
             this.typename = typename;
             this.is_external_type = true;
+        }
+        public override bool Equals(object obj)
+        {
+            if (obj == null)
+                return false;
+            TypeInfo other = obj as TypeInfo;
+            if (is_external_type)
+                return this.typename == other.typename;
+            else
+                return this.reference == other.reference;
+        }
+        public override int GetHashCode()
+        {
+            if (is_external_type)
+                return this.typename.GetHashCode();
+            else
+                return this.reference.GetHashCode();
         }
         public bool isPrimitiveType
         {
@@ -40,10 +61,27 @@ namespace QuantKit
         {
             get
             {
-                return false;
+                return this.reference.MetadataType == MetadataType.GenericInstance;
             }
         }
 
+        public bool isArrayType
+        {
+            get
+            {
+                return this.reference.MetadataType == MetadataType.Array;
+            }
+        }
+
+        public bool isValueType
+        {
+            get
+            {
+                if (this.isPrimitiveType || isEnumType)
+                    return true;
+                return false;
+            }
+        }
         public bool isEnumType
         {
             get
@@ -64,7 +102,10 @@ namespace QuantKit
         {
             get
             {
-                return null;
+                if (is_external_type)
+                    return this.typename;
+                else
+                    return TypeString(this.reference);
             }
         }
         /*public string Name
@@ -118,7 +159,98 @@ namespace QuantKit
             }
         }
 
-        string TypeString(TypeReference typeRef)
+        static string TypeString(TypeReference typeRef)
+        {
+            switch (typeRef.MetadataType)
+                 {
+                case MetadataType.Boolean:
+                    return "bool";
+                case MetadataType.Byte:
+                    return "unsigned char";
+                case MetadataType.SByte:
+                case MetadataType.Char:
+                    return "char";
+                case MetadataType.Double:
+                    return "double";
+                case MetadataType.Int16:
+                    return "short";
+                case MetadataType.Int32:
+                    return "int";
+                case MetadataType.Int64:
+                    return "long";
+                case MetadataType.UInt16:
+                    return "unsigned short";
+                case MetadataType.UInt32:
+                    return "quint32";
+                case MetadataType.UInt64:
+                    return "quint64";
+                case MetadataType.Void:
+                    return "void";
+                case MetadataType.Array:
+                    return TypeString(((Mono.Cecil.ArrayType)typeRef).GetElementType());
+                case MetadataType.GenericInstance:
+                    var gType = typeRef as GenericInstanceType;
+                    string result = TypeString(gType.GetElementType());
+                    result += "<";
+                    bool isFirst = true;
+                    foreach (var item in gType.GenericArguments)
+                    {
+                        if (isFirst)
+                            isFirst = false;
+                        else
+                            result += ",";
+                        result += TypeString(item);
+                    }
+                    result += ">";
+                    return result;
+                case MetadataType.Class:
+                    var cname = Util.ReplaceGenericType(typeRef.Name);
+                    if (cname == "BinaryReader" || cname == "BinaryWriter")
+                        cname = "QByteArray";
+                    return cname;
+                case MetadataType.Object:
+                    return "QVariant";
+                case MetadataType.String:
+                    return "QString";
+                case MetadataType.ValueType:
+                    if (typeRef.Name == "DateTime")
+                    {
+                        return "QDateTime";
+                    }
+                    return typeRef.Name;
+
+/*                case MetadataType.MVar:
+                    return typeRef.Name;
+                case MetadataType.Var:
+                    return typeRef.Name;
+
+                case MetadataType.ByReference:
+                    var refType = typeRef as Mono.Cecil.ByReferenceType;
+                    TypeReference otype = refType.ElementType;
+                    string refstring = TypeString(otype);
+                    return refstring + "&";
+                case MetadataType.TypedByReference:
+                    return typeRef.Name;
+
+                case MetadataType.IntPtr:
+                case MetadataType.UIntPtr:
+                case MetadataType.FunctionPointer:
+                case MetadataType.Pointer:
+                    return typeRef.Name;
+
+                case MetadataType.OptionalModifier:
+                case MetadataType.RequiredModifier:
+                case MetadataType.Pinned:
+                case MetadataType.Sentinel:
+                case MetadataType.Single:
+
+                    */
+                default:
+
+                    return typeRef.Name;
+            }
+        }
+        /*string TypeString(TypeReference typeRef, out bool isValueType)
         {
             MetadataType type = typeRef.MetadataType;
             bool noused;
@@ -180,7 +312,7 @@ namespace QuantKit
                     return result;
                 case MetadataType.Class:
                     isValueType = false;
-                    var cname = ReplaceGenericType(typeRef.Name);
+                    var cname = Util.ReplaceGenericType(typeRef.Name);
                     return cname;
                 case MetadataType.Object:
                     isValueType = false;
@@ -235,6 +367,6 @@ namespace QuantKit
                     isValueType = false;
                     return typeRef.Name;
             }
-        }
+        }*/
     }
 }

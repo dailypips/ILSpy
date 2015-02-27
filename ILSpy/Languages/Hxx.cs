@@ -61,6 +61,14 @@ namespace QuantKit
         {
             bool isValueType;
             bool isFirst = true;
+           /* var info = InfoUtil.Info(def);
+            bool isCopyContructor = info.isCopyConstructor;
+            if (isCopyContructor)
+            {
+                var cinfo = info.DeclaringType;
+                output.Write("const " + cinfo.PrivateName + " &" + def.Parameters[0].Name);
+                return;
+            }*/
             foreach (var p in def.Parameters)
             {
                 if (isFirst)
@@ -68,25 +76,11 @@ namespace QuantKit
                 else
                     output.Write(", ");
                 string ptype = Util.TypeString(p.ParameterType, out isValueType);
-                if (!isValueType && !(p.HasConstant && p.Constant == null))
+                if (!isValueType && !(p.HasConstant && p.Constant == null)) 
                     ptype = "const " + ptype + "&";
                 output.Write(ptype);
                 output.Write(" ");
                 output.Write(p.Name);
-                if (outputOptionValue)
-                {
-                    if (p.HasConstant && p.Constant != null)
-                    {
-                        if (p.Name == "currencyId" && p.Constant.ToString() == "148")
-                            output.Write(" = CurrencyId::USD");
-                        else
-                            output.Write(" = " + p.Constant.ToString().ToLower());
-                    }
-                    else if (p.HasConstant && p.Constant == null)
-                    {
-                        output.Write(" = null");
-                    }
-                }
             }
         }
 
@@ -238,10 +232,11 @@ namespace QuantKit
                 return;
             output.WriteLine("virtual ~" + def.Name + "Private();");
             output.WriteLine();
-            output.WriteLine(def.Name + "Private &operator=(const " + def.Name + "Private &other);");
+            //output.WriteLine(def.Name + "Private &operator=(const " + def.Name + "Private &other);");
             output.Unindent();
             output.Indent();
-            output.WriteLine("bool operator==(const " + def.Name + "Private &other) const;");
+            if (def.Fields.Count() > 0)
+                output.WriteLine("bool operator==(const " + def.Name + "Private &other) const;");
         }
 
         static bool hasChildClass(TypeDefinition def)
@@ -394,7 +389,9 @@ namespace QuantKit
 
                 foreach (var m in ctorSections)
                 {
-                    WriteMethod(m, output);
+                    var minfo = InfoUtil.Info(m);
+                    if (!minfo.isCopyConstructor)
+                        WriteMethod(m, output);
                 }
                 WriteAddCppMethod(def, output);
                 output.Unindent();
@@ -488,11 +485,12 @@ namespace QuantKit
         {
             if (def.IsInterface || Helper.isClassAsEnum(def))
                 return;
+            var info = InfoUtil.Info(def);
             WriteHeadStart(def.Name, output);
             output.WriteLine();
             output.WriteLine("#include <QuantKit/" + def.Name + ".h>");
             output.WriteLine();
-            var info = InfoUtil.Info(def);
+
             if (info.IsBaseClassInModule)
             {
                 output.WriteLine("#include <QSharedData>");
