@@ -161,8 +161,9 @@ namespace QuantKit
             }
             if (!info.IsInterface && !info.isClassAsEnum)
             {
-                output.WriteLine("#include <QtAlgorithms>");
-                output.WriteLine("#include <QSharedDataPointer>");
+                //output.WriteLine("#include <QtAlgorithms>");
+                if (!info.isDerivedClass)
+                    output.WriteLine("#include <QSharedDataPointer>");
             }
 
             if (moduleEnumOrInterfaceList.Count() > 0)
@@ -190,8 +191,8 @@ namespace QuantKit
                 output.Write("virtual ");
 
             WriteMethodHead(m, output, true);
-            
-            if (m.IsGetter)
+
+            if (m.modifiers.HasFlag(Modifiers.Const) )
                 output.Write(" const");
             
             if (m.DeclaringType != null && m.DeclaringType.IsInterface)
@@ -275,9 +276,9 @@ namespace QuantKit
             
             output.WriteLine("~" + info.Name + "();");
             output.WriteLine();
-            /*output.WriteLine(info.Name + "(const " + info.Name + " &other) { qSwap(d_ptr, other.d_ptr); return *this; }");
+            output.WriteLine(info.Name + "(const " + info.Name + " &other);");
             output.WriteLine(info.Name +" &operator=(const "+info.Name+" &other);");
-            output.Unindent();
+            /*output.Unindent();
             output.WriteLine("#ifdef Q_COMPILER_RVALUE_REFS");
             output.Indent();
             output.WriteLine("inline "+info.Name+" &operator=("+info.Name+" &&other) { qSwap(d_ptr, other.d_ptr); return *this; }");
@@ -286,7 +287,7 @@ namespace QuantKit
             output.WriteLine("#endif");
             output.Indent();
             output.WriteLine("inline void swap(" +info.Name+" &other)  { qSwap(d_ptr, other.d_ptr); }");*/
-            output.WriteLine("inline bool operator==(const " + info.Name + " &other) const;");// { return d_ptr == other.d_ptr; }");
+            output.WriteLine("bool operator==(const " + info.Name + " &other) const;");// { return d_ptr == other.d_ptr; }");
             output.WriteLine("inline bool operator!=(const " + info.Name + " &other) const { return !(this->operator==(other));  }");
         }
 
@@ -489,7 +490,8 @@ namespace QuantKit
 
                 foreach (var m in publicSections)
                 {
-                    WriteMethod(m, output);
+                    if (!(info.isDerivedClass && (m.modifiers.HasFlag(Modifiers.Virtual) || m.modifiers.HasFlag(Modifiers.Override))))
+                        WriteMethod(m, output);
                 }
                 output.Unindent();
                 //if (protectedSection.Count() > 0 || privateSection.Count() > 0)
@@ -505,9 +507,9 @@ namespace QuantKit
                 output.WriteLine();
                 output.WriteLine("protected:");
                 output.Indent();
-                output.WriteLine(info.Name + "(" + info.PrivateName + "& dd);");
+                output.WriteLine(info.Name + "(Internal::" + info.PrivateName + "& dd);");
                 if (!isDerivedClass)
-                    output.WriteLine("QSharedDataPointer<" + info.PrivateName + "> d_ptr;");
+                    output.WriteLine("QSharedDataPointer<Internal::" + info.PrivateName + "> d_ptr;");
                 output.Unindent();
             }
 
@@ -519,7 +521,7 @@ namespace QuantKit
                 //if (!hasChildClass(def))
                 if(!hasChildClass && !isDerivedClass)
                 {
-                    output.WriteLine("QSharedDataPointer<" + info.PrivateName + "> d_ptr;");
+                    output.WriteLine("QSharedDataPointer<Internal::" + info.PrivateName + "> d_ptr;");
                     output.WriteLine();
                 }
                 if (isDerivedClass)
@@ -527,7 +529,12 @@ namespace QuantKit
                     output.WriteLine("QK_DECLARE_PRIVATE(" + info.Name + ")");
                     output.WriteLine();
                 }
-                output.WriteLine("friend QUANTKIT_EXPORT QDataStream &operator<<(QDataStream & stream, const " + info.Name + " &"+ info.Name.ToLower()+");");
+
+                if (!info.isDerivedClass)
+                {
+
+                    output.WriteLine("friend QUANTKIT_EXPORT QDataStream &operator<<(QDataStream & stream, const " + info.Name + " &" + info.Name.ToLower() + ");");
+                }
                 output.Unindent();
             }
             /*if (protectedSection.Count() > 0)
@@ -588,14 +595,14 @@ namespace QuantKit
             WriteNamespaceStart(info.Namespace, output);
             if (!info.IsInterface && !info.isClassAsEnum)
             {
-                output.WriteLine("class " + info.PrivateName + ";");
+                output.WriteLine("namespace Internal { class " + info.PrivateName + "; }");
                 output.WriteLine();
             }
             WriteForward(info, output);
             WriteClassBody(info, output);
             //output.WriteLine();
 
-            if (!info.IsInterface && !info.isClassAsEnum)
+            if (!info.IsInterface && !info.isClassAsEnum && !info.isDerivedClass)
             {
                 output.WriteLine();
                 output.WriteLine("QUANTKIT_EXPORT QDataStream &operator<<(QDataStream &, const " + info.Name + " &);");

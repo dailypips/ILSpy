@@ -198,13 +198,13 @@ namespace QuantKit
             output.WriteLine("bool " + def.Name + "::operator==(const " + def.Name + " &other) const");
             output.WriteLine("{");
             output.Indent();
-            output.WriteLine("if(d && other.d)");
+            output.WriteLine("if(d_ptr && other.d_ptr)");
             output.Indent();
-            output.WriteLine("return (*d == *other.d);");
+            output.WriteLine("return (*d_ptr == *other.d_ptr);");
             output.Unindent();
             output.WriteLine("else");
             output.Indent();
-            output.WriteLine("return (d==other.d)");
+            output.WriteLine("return (d_ptr==other.d_ptr)");
             output.Unindent();
             output.Unindent();
             output.WriteLine("}");
@@ -219,7 +219,7 @@ namespace QuantKit
         {
             output.WriteLine(def.Name + "::" + def.Name + " (const " + def.Name + " &other)");
             output.Indent();
-            output.WriteLine(": d(other.d)");
+            output.WriteLine(": d_ptr(other.d_ptr)");
             output.Unindent();
             output.WriteLine("{");      
             output.WriteLine("}");
@@ -229,17 +229,43 @@ namespace QuantKit
             output.WriteLine(def.Name + "::" + def.Name + " &operator=(const " + def.Name + " &other)");
             output.WriteLine("{");
             output.Indent();
-            output.WriteLine("d = other.d;");
+            output.WriteLine("d_ptr = other.d_ptr;");
             output.WriteLine("return *this;");
             output.Unindent();
+            output.WriteLine("}");
+        }
+
+        static void WritePrivateConstructor(TypeDefinition def, ITextOutput output)
+        {
+            var info = InfoUtil.Info(def);
+            output.WriteLine(def.Name + "::" + def.Name + " (Internal::" + def.Name + "Private &dd)");
+            if (info.isDerivedClass)
+            {
+                output.Indent();
+                output.WriteLine(": " + info.BaseTypeInModule.Name + "(dd)");
+                output.Unindent();
+            }
+            else
+            {
+                output.Indent();
+                output.WriteLine(": d_ptr(&dd)");
+                output.Unindent();
+            }
+            output.WriteLine("{");
             output.WriteLine("}");
         }
         static void WriteAddCppMethod(TypeDefinition def, ITextOutput output)
         {
             if (def.IsInterface)
                 return;
+            var info = InfoUtil.Info(def);
             WriteDeconstructor(def, output);
             output.WriteLine();
+            if (info.HasDerivedClass)
+            {
+                WritePrivateConstructor(def, output);
+                output.WriteLine();
+            }
             WriteCopyConstructor(def, output);
             output.WriteLine();
             WriteAssignConstructor(def, output);
@@ -382,7 +408,16 @@ namespace QuantKit
 
             output.WriteLine();
             output.Indent();
-            output.Write(": d_ptr(new " + def.DeclaringType.Name + "Private");
+            var cinfo = InfoUtil.Info(def.DeclaringType);
+            if (cinfo.isDerivedClass)
+            {
+                output.Write(": " +cinfo.BaseTypeInModule.Name+"(*new Internal::" + def.DeclaringType.Name + "Private");
+
+            }
+            else
+            {
+                output.Write(": d_ptr(new Internal::" + def.DeclaringType.Name + "Private");
+            }
             if (def.Parameters.Count() > 0)
             {
                 output.Write("(");
@@ -403,6 +438,7 @@ namespace QuantKit
                 return;
 
             var info = InfoUtil.Info(def);
+            var classInfo = InfoUtil.Info(def.DeclaringType);
 
             if (def.IsConstructor)
             {
@@ -417,7 +453,7 @@ namespace QuantKit
             output.Write("(");
             WriteParameters(def, output, false);
             output.Write(")");
-            if (def.IsGetter)
+            if (info.modifiers.HasFlag(Modifiers.Const))
             {
                 output.Write(" const");
             }
@@ -431,7 +467,10 @@ namespace QuantKit
                 {
                     output.Write("return ");
                 }
-                output.Write("d_ptr->");
+                if (classInfo.isDerivedClass)
+                    output.Write("d()->");
+                else
+                    output.Write("d_ptr->");
                 output.Write(info.Name);
                 output.Write("(");
                 WriteParameterNames(def, output);
@@ -546,10 +585,15 @@ namespace QuantKit
                 if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
                     output.WriteLine();
 
+                var info = InfoUtil.Info(def);
                 foreach (var m in publicSections)
                 {
-                    WriteMethod(m, output);
-                    output.WriteLine();
+                    var minfo = InfoUtil.Info(m);
+                    if (!(info.isDerivedClass && (minfo.modifiers.HasFlag(Modifiers.Virtual) || minfo.modifiers.HasFlag(Modifiers.Override))))
+                    {
+                        WriteMethod(m, output);
+                        output.WriteLine();
+                    }
                 }
                 //if (protectedSection.Count() > 0 || privateSection.Count() > 0)
                 //    output.WriteLine();
@@ -621,7 +665,7 @@ namespace QuantKit
             //WriteIncludeBody(def, output);
             output.WriteLine();
             output.WriteLine("using namespace QuantKit;");
-            //output.WriteLine("using namespace QuantKit::Internal;");
+            output.WriteLine("using namespace QuantKit::Internal;");
             output.WriteLine();
             //WriteNamespaceStart(def.Namespace, output);
             //output.WriteLine("namespace Internal {");
@@ -633,10 +677,15 @@ namespace QuantKit
 
             output.WriteLine("// Pubic API ");
             output.WriteLine();
+            if(info.isDerivedClass){
+                output.WriteLine("QK_IMPLEMENTATION_PRIVATE(" + info.Name + ")");
+                output.WriteLine();
+            }
+
 
             WriteProxyClassBody(def, output);
 
-            if (!def.IsInterface && !Helper.isClassAsEnum(def))
+            if (!def.IsInterface && !Helper.isClassAsEnum(def) && !info.isDerivedClass)
             {
                 output.WriteLine();
                 output.WriteLine("QDataStream& " + def.Name + "::operator<<(QDataStream &stream, const " + def.Name + " &" +def.Name.ToLower() +")");

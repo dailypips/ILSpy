@@ -55,7 +55,7 @@ namespace QuantKit
 },
 { "SmartQuant.BarSliceFactory", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		{"method_0","method_0"},
@@ -65,7 +65,7 @@ namespace QuantKit
 },
 { "SmartQuant.TimeBarFactoryItem", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"clockType_0","clockType_0"},
+		{"clockType_0","m_clockType"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
@@ -125,7 +125,7 @@ namespace QuantKit
 		{"dataFile_0","dataFile_0"},
 		{"streamerManager_0","streamerManager_0"},
 		{"int_0","int_0"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"quickLZ_0","quickLZ_0"},
 	},new Dictionary<string,string>(){
 		// method 
@@ -256,7 +256,7 @@ namespace QuantKit
 },
 { "SmartQuant.DataManager", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"idArray_1","idArray_1"},
 		{"idArray_2","idArray_2"},
 		{"idArray_3","idArray_3"},
@@ -297,7 +297,7 @@ namespace QuantKit
 		{"class44_1","class44_1"},
 		{"class44_2","class44_2"},
 		{"class44_3","class44_3"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"objectKey_1","objectKey_1"},
 		{"long_3","long_3"},
 		{"bool_3","bool_3"},
@@ -378,7 +378,7 @@ namespace QuantKit
 },
 { "SmartQuant.FieldList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
@@ -387,7 +387,7 @@ namespace QuantKit
 		// field 
 		{"dataFile_0","dataFile_0"},
 		{"string_0","string_0"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"bool_0","bool_0"},
 		{"idArray_1","idArray_1"},
 		{"idArray_2","idArray_2"},
@@ -652,7 +652,7 @@ namespace QuantKit
 },
 { "SmartQuant.MatchingEngine", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		{"method_4","method_4"},
@@ -668,7 +668,7 @@ namespace QuantKit
 },
 { "SmartQuant.OrderFactory", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
@@ -682,7 +682,7 @@ namespace QuantKit
 },
 { "SmartQuant.StreamerManager", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"dictionary_0","m_dictionary"},
 	},new Dictionary<string,string>(){
 		// method 
@@ -790,7 +790,7 @@ namespace QuantKit
 		{"stopwatch_0","stopwatch_0"},
 		{"bool_1","bool_1"},
 		{"byte_0","m_eventTypeId"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		{"method_0","method_0"},
@@ -1008,7 +1008,7 @@ namespace QuantKit
 },
 { "SmartQuant.GroupDispatcher", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"list_0","list_0"},
 		{"dictionary_0","m_dictionary"},
 	},new Dictionary<string,string>(){
@@ -1051,7 +1051,7 @@ namespace QuantKit
 },
 { "SmartQuant.ExecutionSimulator", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		{"method_4","method_4"},
@@ -1073,7 +1073,7 @@ namespace QuantKit
 { "SmartQuant.OrderManager", Tuple.Create( new Dictionary<string, string>(){
 		// field 
 		{"list_0","list_0"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"dictionary_0","m_dictionary"},
 		{"int_0","int_0"},
 		{"orderServer_0","orderServer_0"},
@@ -1124,7 +1124,7 @@ namespace QuantKit
 },
 { "SmartQuant.AltIdList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
@@ -1157,7 +1157,7 @@ namespace QuantKit
 { "SmartQuant.InstrumentList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
 		{"dictionary_0","m_dictionary"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
@@ -1195,7 +1195,7 @@ namespace QuantKit
 },
 { "SmartQuant.Strategy", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"idArray_1","idArray_1"},
 		{"idArray_2","idArray_2"},
 		{"raiseEvents","raiseEvents"},
@@ -1278,7 +1278,7 @@ namespace QuantKit
 },
 { "SmartQuant.Account", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
@@ -1306,14 +1306,14 @@ namespace QuantKit
 },
 { "SmartQuant.PortfolioStatisticsItemList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})
 },
 { "SmartQuant.Portfolio", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"idArray_1","idArray_1"},
 	},new Dictionary<string,string>(){
 		// method 
@@ -1326,7 +1326,7 @@ namespace QuantKit
 },
 { "SmartQuant.PortfolioList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"dictionary_0","m_dictionary"},
 	},new Dictionary<string,string>(){
 		// method 
@@ -1359,7 +1359,7 @@ namespace QuantKit
 { "SmartQuant.PortfolioStatistics", Tuple.Create( new Dictionary<string, string>(){
 		// field 
 		{"portfolio_0","portfolio_0"},
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"idArray_1","idArray_1"},
 	},new Dictionary<string,string>(){
 		// method 
@@ -1417,7 +1417,7 @@ namespace QuantKit
 },
 { "SmartQuant.ProviderList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 		{"dictionary_0","m_dictionary"},
 	},new Dictionary<string,string>(){
 		// method 
@@ -1542,7 +1542,7 @@ namespace QuantKit
 },
 { "SmartQuant.StrategyList", Tuple.Create( new Dictionary<string, string>(){
 		// field 
-		{"idArray_0","idArray_0"},
+		{"idArray_0","m_idArray"},
 	},new Dictionary<string,string>(){
 		// method 
 		})

@@ -34,6 +34,8 @@ namespace QuantKit
                 output.WriteLine();
                 output.WriteLine("namespace " + nspace + " {");
                 output.WriteLine();
+                output.WriteLine("namespace Internal {");
+                output.WriteLine();
             }
         }
 
@@ -45,6 +47,8 @@ namespace QuantKit
             bool hasNamespace = nspace != null && nspace != "";
             if (hasNamespace)
             {
+                output.WriteLine();
+                output.WriteLine("} // namespace Internal");
                 output.WriteLine();
                 output.WriteLine("} // namepsace " + nspace);
                 output.WriteLine();
@@ -185,7 +189,7 @@ namespace QuantKit
             
             WriteMethodHead(m, output, true);
 
-            if (m.IsGetter)
+            if (info.modifiers.HasFlag(Modifiers.Const))
                 output.Write(" const");
 
             if (m.DeclaringType != null && m.DeclaringType.IsInterface)

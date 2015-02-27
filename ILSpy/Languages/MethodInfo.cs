@@ -224,8 +224,10 @@ namespace QuantKit
         {
             this.def = m;
             this.modifiers = Util.ConvertModifiers(m);
-            if (m.Name == "ToString")
-                modifiers = modifiers | Modifiers.Virtual;
+            if (m.Name == "ToString") 
+                modifiers = modifiers | Modifiers.Virtual | Modifiers.Const;
+            if (m.IsGetter)
+                modifiers = modifiers | Modifiers.Const;
             Rename();
 
             this.return_type = new TypeInfo(this.def.ReturnType);
@@ -246,9 +248,9 @@ namespace QuantKit
                         if (s.Trim() == "{" || s.Trim() == "});")
                             continue;
                         if (s.Contains(","))
-                            newbody.Add(s.Replace(",", "+").Trim());
+                            newbody.Add("\t\t"+s.Replace(",", "+").Trim());
                         else
-                            newbody.Add(s.Trim() + ";");
+                            newbody.Add("\t\t"+s.Trim() + ";");
                     }
                     this.method_body = newbody;
                 }

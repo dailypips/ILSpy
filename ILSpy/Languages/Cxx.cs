@@ -187,7 +187,7 @@ namespace QuantKit
             var info = InfoUtil.Info(m);
 
             WriteMethodHead(m, output, true);
-            if (m.IsGetter)
+            if (info.modifiers.HasFlag(Modifiers.Const))
                 output.Write(" const");
             output.WriteLine();
             output.WriteLine("{");
