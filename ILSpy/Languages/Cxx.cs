@@ -187,7 +187,7 @@ namespace QuantKit
 
             var info = InfoUtil.Info(m);
 
-            if (info.MethodBody.Count() == 1)
+            if (info.isInline)// && !info.modifiers.HasFlag(Modifiers.Virtual))
                 return false;
             WriteMethodHead(m, output, true);
             if (info.modifiers.HasFlag(Modifiers.Const))
@@ -241,7 +241,7 @@ namespace QuantKit
             if (isSpecial_DataObject(m))
             {
                 output.Indent();
-                output.WriteLine(": EventPrivate(dataTime)");
+                output.WriteLine(": EventPrivate(dateTime)");
                 output.Unindent();
                 return;
             }
@@ -262,7 +262,7 @@ namespace QuantKit
                 return;
 
             var info = InfoUtil.Info(m);
-            if (info.isCopyConstructor)
+            if (info.isCopyConstructor || info.isInline)
                 return;
             WriteMethodHead(m, output, true);
             output.WriteLine();
@@ -329,7 +329,7 @@ namespace QuantKit
                 if (info.IsBaseClassInModule)
                     output.Write("return ");
                 else
-                    output.WriteLine("return base::operator==(other) &&");
+                    output.WriteLine("return "+ info.BaseTypeInModule.Name +"Private::operator==(other) &&");
                     
                 for (int i = 0; i < def.Fields.Count(); ++i )
                 {

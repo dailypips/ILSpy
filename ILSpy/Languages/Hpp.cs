@@ -280,19 +280,22 @@ namespace QuantKit
             
             output.WriteLine("~" + info.Name + "();");
             output.WriteLine();
-            output.WriteLine(info.Name + "(const " + info.Name + " &other);");
-            output.WriteLine(info.Name +" &operator=(const "+info.Name+" &other);");
-            /*output.Unindent();
-            output.WriteLine("#ifdef Q_COMPILER_RVALUE_REFS");
-            output.Indent();
-            output.WriteLine("inline "+info.Name+" &operator=("+info.Name+" &&other) { qSwap(d_ptr, other.d_ptr); return *this; }");
-            output.WriteLine("inline " + info.Name + "(const " + info.Name + " &&other)  { qSwap(d_ptr, other.d_ptr); return *this; }");
-            output.Unindent();
-            output.WriteLine("#endif");
-            output.Indent();
-            output.WriteLine("inline void swap(" +info.Name+" &other)  { qSwap(d_ptr, other.d_ptr); }");*/
-            output.WriteLine("bool operator==(const " + info.Name + " &other) const;");// { return d_ptr == other.d_ptr; }");
-            output.WriteLine("inline bool operator!=(const " + info.Name + " &other) const { return !(this->operator==(other));  }");
+            if (!info.isDerivedClass)
+            {
+                output.WriteLine(info.Name + "(const " + info.Name + " &other);");
+                output.WriteLine(info.Name + "& operator=(const " + info.Name + " &other);");
+                /*output.Unindent();
+                output.WriteLine("#ifdef Q_COMPILER_RVALUE_REFS");
+                output.Indent();
+                output.WriteLine("inline "+info.Name+" &operator=("+info.Name+" &&other) { qSwap(d_ptr, other.d_ptr); return *this; }");
+                output.WriteLine("inline " + info.Name + "(const " + info.Name + " &&other)  { qSwap(d_ptr, other.d_ptr); return *this; }");
+                output.Unindent();
+                output.WriteLine("#endif");
+                output.Indent();
+                output.WriteLine("inline void swap(" +info.Name+" &other)  { qSwap(d_ptr, other.d_ptr); }");*/
+                output.WriteLine("bool operator==(const " + info.Name + " &other) const;");// { return d_ptr == other.d_ptr; }");
+                output.WriteLine("inline bool operator!=(const " + info.Name + " &other) const { return !(this->operator==(other));  }");
+            }
         }
 
         static bool hasChildClass(TypeDefinition def)
@@ -537,7 +540,7 @@ namespace QuantKit
                 if (!info.isDerivedClass)
                 {
 
-                    output.WriteLine("friend QDebug operator<<(QDebug os, const " + info.Name + " &" + info.Name.ToLower() + ");");
+                    output.WriteLine("friend QDebug operator << (QDebug dbg, const " + info.Name + "& " + info.Name.ToLower() + ");");
                 }
                 output.Unindent();
             }
@@ -609,7 +612,7 @@ namespace QuantKit
             if (!info.IsInterface && !info.isClassAsEnum && !info.isDerivedClass)
             {
                 output.WriteLine();
-                output.WriteLine("QUANTKIT_EXPORT QDebug operator<<(QDebug os, const " + info.Name + " &" + info.Name.ToLower() + ");");
+                output.WriteLine("QUANTKIT_EXPORT QDebug operator<<(QDebug os, const " + info.Name + "& " + info.Name.ToLower() + ");");
             }
             WriteNamespaceEnd(info.Namespace, output);
             //if (def.Name != "CurrencyId" && def.Name != "EventType" && !def.IsEnum && !def.IsInterface)

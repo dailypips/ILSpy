@@ -143,6 +143,8 @@ namespace QuantKit
                     if (p.Name == "currencyId" && p.HasConstant && p.Constant != null)
                         mlist.Add("CurrencyId");
                 }
+                if (m.Name == "get_TypeId")
+                    mlist.Add("EventType");
             }
             foreach (var f in def.Fields)
             {
@@ -175,6 +177,11 @@ namespace QuantKit
                     output.WriteLine("#include \"" + m + CppLanguage.HxxFileExtension +"\"");
                     //output.WriteLine("#include <QuantKit/" + m + ".h>");
                 }
+            }
+            foreach(var m in moduleEnumOrInterfaceList)
+            {
+                if (m == "EventType")
+                    output.WriteLine("#include <QuantKit/" + m + CppLanguage.HppFileExtension + ">");
             }
         }
 
@@ -230,8 +237,9 @@ namespace QuantKit
                 return;
             }
 
-            if (info.MethodBody.Count() == 1)
+            if (info.MethodBody.Count() == 1)// && !info.modifiers.HasFlag(Modifiers.Virtual))
             {
+                info.isInline = true;
                 WriteInlineMethod(m, output);
             }else
                 output.WriteLine(";");

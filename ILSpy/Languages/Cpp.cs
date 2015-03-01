@@ -204,7 +204,7 @@ namespace QuantKit
             output.Unindent();
             output.WriteLine("else");
             output.Indent();
-            output.WriteLine("return (d_ptr==other.d_ptr)");
+            output.WriteLine("return (d_ptr==other.d_ptr);");
             output.Unindent();
             output.Unindent();
             output.WriteLine("}");
@@ -226,7 +226,7 @@ namespace QuantKit
         }
         static void WriteAssignConstructor(TypeDefinition def, ITextOutput output)
         {
-            output.WriteLine(def.Name + "::" + def.Name + " &operator=(const " + def.Name + " &other)");
+            output.WriteLine(def.Name +"& " + def.Name +"::operator=(const " + def.Name + " &other)");
             output.WriteLine("{");
             output.Indent();
             output.WriteLine("d_ptr = other.d_ptr;");
@@ -266,12 +266,15 @@ namespace QuantKit
                 WritePrivateConstructor(def, output);
                 output.WriteLine();
             }
-            WriteCopyConstructor(def, output);
-            output.WriteLine();
-            WriteAssignConstructor(def, output);
-            output.WriteLine();
-            WriteEqualFunction(def, output);
-            output.WriteLine();
+            if (!info.isDerivedClass)
+            {
+                WriteCopyConstructor(def, output);
+                output.WriteLine();
+                WriteAssignConstructor(def, output);
+                output.WriteLine();
+                WriteEqualFunction(def, output);
+                output.WriteLine();
+            }
         }
 
         static bool hasChildClass(TypeDefinition def)
@@ -692,10 +695,10 @@ namespace QuantKit
             if (!def.IsInterface && !Helper.isClassAsEnum(def) && !info.isDerivedClass)
             {
                 //output.WriteLine();
-                output.WriteLine("QDebug " + def.Name + "::operator<<(QDebug os, const " + def.Name + " &" +def.Name.ToLower() +")");
+                output.WriteLine("QDebug operator<<(QDebug dbg, const " + def.Name + "& " +def.Name.ToLower() +")");
                 output.WriteLine("{");
                 output.Indent();
-                output.WriteLine("return os << " + def.Name.ToLower()+".toString();");
+                output.WriteLine("return dbg << " + def.Name.ToLower()+".toString();");
                 output.Unindent();
                 output.WriteLine("}");
             }

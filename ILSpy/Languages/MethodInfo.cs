@@ -29,9 +29,14 @@ namespace QuantKit
         AstNode decl = null;
         List<ParameterInfo> parameters = null;
         TypeInfo return_type;
+        bool is_inline = false;
 
         #region IsFunction
-
+        public bool isInline
+        {
+            get { return is_inline; }
+            set { is_inline = value; }
+        }
         public bool isCopyConstructor
         {
             get
@@ -238,7 +243,11 @@ namespace QuantKit
         {
             if (this.method_body.Count() > 0 && this.def.Name.ToLower() == "tostring")
             {
-                if (this.method_body[0].Trim() == "return string.Concat(new object[]")
+                List<string> newbody = new List<string>();
+                newbody.Add("\treturn \"" + def.DeclaringType.Name + "\";");
+                this.method_body = newbody;
+            }
+                /*if (this.method_body[0].Trim() == "return string.Concat(new object[]")
                 {
                     List<string> newbody = new List<string>();
                     newbody.Add("\treturn");
@@ -254,7 +263,7 @@ namespace QuantKit
                     }
                     this.method_body = newbody;
                 }
-            }
+            }*/
         }
 
         void special_init()
