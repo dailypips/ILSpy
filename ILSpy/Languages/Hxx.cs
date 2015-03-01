@@ -178,6 +178,38 @@ namespace QuantKit
             }
         }
 
+        static void WriteInlineMethod(MethodDefinition m , ITextOutput output)
+        {
+            var info = InfoUtil.Info(m);
+
+            string line = string.Empty;
+
+            if (info.Name == "getTypeId")
+            {
+                if (m.Name == "get_TypeId")
+                    line = "return EventType::" + m.DeclaringType.Name + ";";
+            }
+            else
+            {
+                line = info.MethodBody[0].Trim();
+            }
+            var count = line.Count();
+
+            if (count > 30)
+            {
+                output.WriteLine();
+                output.WriteLine("{");
+                output.Indent();
+                output.WriteLine(line);
+                output.Unindent();
+                output.WriteLine("}");
+                output.WriteLine();
+            }
+            else
+            {
+                output.WriteLine(" { " + line + " }");
+            }
+        }
         static void WriteMethod(MethodDefinition m, ITextOutput output)
         {
             if (m.IsConstructor && m.IsStatic)
@@ -193,8 +225,15 @@ namespace QuantKit
                 output.Write(" const");
 
             if (m.DeclaringType != null && m.DeclaringType.IsInterface)
+            {
                 output.WriteLine(" = 0;");
-            else
+                return;
+            }
+
+            if (info.MethodBody.Count() == 1)
+            {
+                WriteInlineMethod(m, output);
+            }else
                 output.WriteLine(";");
         }
 
@@ -239,8 +278,12 @@ namespace QuantKit
             //output.WriteLine(def.Name + "Private &operator=(const " + def.Name + "Private &other);");
             output.Unindent();
             output.Indent();
+
             if (def.Fields.Count() > 0)
+            {
                 output.WriteLine("bool operator==(const " + def.Name + "Private &other) const;");
+                output.WriteLine();
+            }
         }
 
         static bool hasChildClass(TypeDefinition def)
@@ -399,8 +442,8 @@ namespace QuantKit
                 }
                 WriteAddCppMethod(def, output);
                 output.Unindent();
-                if (publicSections.Count() > 0 || protectedSection.Count() > 0 || privateSection.Count() > 0)
-                    output.WriteLine();
+                //if (publicSections.Count() > 0 || protectedSection.Count() > 0 || privateSection.Count() > 0)
+                //    output.WriteLine();
             }
 
             /* write public method */
@@ -417,8 +460,8 @@ namespace QuantKit
                     if (i < GetAndSet.Count() - 1)
                         output.WriteLine();
                 }
-                if (GetAndSet.Count() > 0 && OnlySet.Count() > 0)
-                    output.WriteLine();
+                //if (GetAndSet.Count() > 0 && OnlySet.Count() > 0)
+                //    output.WriteLine();
 
                 for (int i = 0; i < OnlySet.Count(); ++i)
                 {
@@ -429,8 +472,8 @@ namespace QuantKit
                         output.WriteLine();
                 }
 
-                if (OnlyGet.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0))
-                    output.WriteLine();
+                //if (OnlyGet.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0))
+                //    output.WriteLine();
                 for (int i = 0; i < OnlyGet.Count(); ++i)
                 {
                     var f = OnlyGet[i];
@@ -439,16 +482,16 @@ namespace QuantKit
                         output.WriteLine();
                 }
 
-                if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
-                    output.WriteLine();
+                //if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
+                //    output.WriteLine();
 
                 foreach (var m in publicSections)
                 {
                     WriteMethod(m, output);
                 }
                 output.Unindent();
-                if (protectedSection.Count() > 0 || privateSection.Count() > 0)
-                    output.WriteLine();
+                //if (protectedSection.Count() > 0 || privateSection.Count() > 0)
+                //    output.WriteLine();
             }
 
             /* write protected section */

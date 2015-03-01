@@ -154,6 +154,10 @@ namespace QuantKit
             BuildIncludeList(info, out externalList, out classList, out moduleEnumOrInterfaceList);
             //TODO IEnumable and etc.. ICollection...
             output.WriteLine("#include <QuantKit/quantkit_global.h>");
+            if (info.isDerivedClass && info.Fields.Count() > 0)
+                output.WriteLine("#include <QuantKit/quantkit_extension.h>");
+            if (!info.isDerivedClass)
+                output.WriteLine("#include <QDebug>");
             foreach (var e in externalList)
             {
                 if (!e.StartsWith("Class"))
@@ -524,7 +528,7 @@ namespace QuantKit
                     output.WriteLine("QSharedDataPointer<Internal::" + info.PrivateName + "> d_ptr;");
                     output.WriteLine();
                 }
-                if (isDerivedClass)
+                if (isDerivedClass && info.Fields.Count() > 0)
                 {
                     output.WriteLine("QK_DECLARE_PRIVATE(" + info.Name + ")");
                     output.WriteLine();
@@ -533,7 +537,7 @@ namespace QuantKit
                 if (!info.isDerivedClass)
                 {
 
-                    output.WriteLine("friend QUANTKIT_EXPORT QDataStream &operator<<(QDataStream & stream, const " + info.Name + " &" + info.Name.ToLower() + ");");
+                    output.WriteLine("friend QDebug operator<<(QDebug os, const " + info.Name + " &" + info.Name.ToLower() + ");");
                 }
                 output.Unindent();
             }
@@ -605,7 +609,7 @@ namespace QuantKit
             if (!info.IsInterface && !info.isClassAsEnum && !info.isDerivedClass)
             {
                 output.WriteLine();
-                output.WriteLine("QUANTKIT_EXPORT QDataStream &operator<<(QDataStream &, const " + info.Name + " &);");
+                output.WriteLine("QUANTKIT_EXPORT QDebug operator<<(QDebug os, const " + info.Name + " &" + info.Name.ToLower() + ");");
             }
             WriteNamespaceEnd(info.Namespace, output);
             //if (def.Name != "CurrencyId" && def.Name != "EventType" && !def.IsEnum && !def.IsInterface)

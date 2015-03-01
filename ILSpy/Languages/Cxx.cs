@@ -177,27 +177,29 @@ namespace QuantKit
 
         }*/
 
-        static void WriteMethod(MethodDefinition m, ITextOutput output)
+        static bool WriteMethod(MethodDefinition m, ITextOutput output)
         {
             if (m.IsConstructor && m.IsStatic)
-                return;
+                return false;
             if (m.DeclaringType != null && m.DeclaringType.IsInterface)
-                return;
+                return false;
+
 
             var info = InfoUtil.Info(m);
 
+            if (info.MethodBody.Count() == 1)
+                return false;
             WriteMethodHead(m, output, true);
             if (info.modifiers.HasFlag(Modifiers.Const))
                 output.Write(" const");
             output.WriteLine();
             output.WriteLine("{");
-            // special process getTypeId
 
             if (info.Name == "getTypeId")
             {
                 output.Indent();
                 if (m.Name == "get_TypeId")
-                    output.WriteLine(" return EventType::" + m.DeclaringType.Name +";");
+                    output.WriteLine(" return EventType::" + m.DeclaringType.Name + ";");
                 output.Unindent();
             }
             else
@@ -207,18 +209,10 @@ namespace QuantKit
                     output.WriteLine(s);
                 //output.Unindent();
             }
-            /*if (m.ReturnType.MetadataType != MetadataType.Void)
-            {
-                output.Indent();
-                string rvalue;
-                if (m.Name == "get_TypeId")
-                    rvalue = "EventType::" + m.DeclaringType.Name;
-                else
-                    rvalue = Util.GetDefaultValue(m.ReturnType);
-                output.WriteLine("return " + rvalue + ";");
-                output.Unindent();
-            }*/
+
+
             output.WriteLine("}");
+            return true;
         }
 
         static bool isSpecial_DataObject(MethodDefinition m)
@@ -289,6 +283,7 @@ namespace QuantKit
                 WriteCtorBody(m, output);
             }
             output.WriteLine("}");
+            output.WriteLine();
         }
         static void WriteFieldAsMethod(FieldDefinition field, ITextOutput output, bool isGetter)
         {
@@ -328,7 +323,7 @@ namespace QuantKit
             output.WriteLine();
             if (def.Fields.Count() > 0)
             {
-                output.WriteLine("bool " + def.Name + "Private::operator==(const " + def.Name + " &other) const");
+                output.WriteLine("bool " + def.Name + "Private::operator==(const " + def.Name + "Private &other) const");
                 output.WriteLine("{");
                 output.Indent();
                 if (info.IsBaseClassInModule)
@@ -350,6 +345,7 @@ namespace QuantKit
                 }
                 output.Unindent();
                 output.WriteLine("}");
+                output.WriteLine();
             }
         }
 
@@ -494,12 +490,12 @@ namespace QuantKit
                 {
                     WriteCtor(m, output);
                 }
-                if (ctorSections.Count() > 0)
-                    output.WriteLine();
+                //if (ctorSections.Count() > 0)
+                //    output.WriteLine();
                 WriteAddCppMethod(def, output);
 
-                if (publicSections.Count() > 0 || protectedSection.Count() > 0 || privateSection.Count() > 0)
-                    output.WriteLine();
+                //if (publicSections.Count() > 0 || protectedSection.Count() > 0 || privateSection.Count() > 0)
+                //    output.WriteLine();
             }
 
             /* write public method */
@@ -543,17 +539,17 @@ namespace QuantKit
                         output.WriteLine();
                 }
 
-                if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
-                    output.WriteLine();
+                //if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
+                //    output.WriteLine();
 
                 foreach (var m in publicSections)
                 {
-                    WriteMethod(m, output);
-                    output.WriteLine();
+                    if (WriteMethod(m, output))
+                        output.WriteLine();
                 }
                 //output.Unindent();
-                if (protectedSection.Count() > 0 || privateSection.Count() > 0)
-                    output.WriteLine();
+                //if (protectedSection.Count() > 0 || privateSection.Count() > 0)
+                //    output.WriteLine();
             }
 
             /* write protected section */
@@ -565,12 +561,12 @@ namespace QuantKit
                     //output.Indent();
                     foreach (var m in protectedSection)
                     {
-                        WriteMethod(m, output);
-                        output.WriteLine();
+                        if (WriteMethod(m, output))
+                            output.WriteLine();
                     }
                     //output.Unindent();
-                    if (privateSection.Count() > 0)
-                        output.WriteLine();
+                    //if (privateSection.Count() > 0)
+                    //    output.WriteLine();
                 }
             }
 
@@ -578,12 +574,12 @@ namespace QuantKit
             {
                 if (privateSection.Count() > 0)
                 {
-                    output.WriteLine("//private:");
+                    //output.WriteLine("//private:");
                     //output.Indent();
                     foreach (var m in privateSection)
                     {
-                        WriteMethod(m, output);
-                        output.WriteLine();
+                        if (WriteMethod(m, output))
+                            output.WriteLine();
                     }
                     //output.Unindent();
                 }

@@ -407,6 +407,7 @@ namespace QuantKit
                             WriteCppCode(t, new PlainTextOutput(w));
                         }
                     }
+
                     /*using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
                     {
                         AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
@@ -419,6 +420,30 @@ namespace QuantKit
                         GenerateCplusplusCode(codeDomBuilder, new PlainTextOutput(w), "SmartQuant");
                     }*/
                 });
+            // Write Helper Class
+
+            {
+                var path = options.SaveAsProjectDirectory;
+                var includepath = Path.Combine(path, "include");
+                includepath = Path.Combine(includepath, "QuantKit");
+                Directory.CreateDirectory(includepath);
+                using (StreamWriter w = new StreamWriter(Path.Combine(includepath, "quantkit_global" + HppFileExtension)))
+                {
+                    Helper.WriteGlobalHpp(new PlainTextOutput(w));
+                }
+                using (StreamWriter w = new StreamWriter(Path.Combine(includepath, "quantkit_extension" + HppFileExtension)))
+                {
+                    Helper.WriteQtExtension(new PlainTextOutput(w));
+                }
+
+                var srcpath = Path.Combine(path, "src");
+                Directory.CreateDirectory(srcpath);
+                using (StreamWriter w = new StreamWriter(Path.Combine(srcpath, "quantkit_boost" + HppFileExtension)))
+                {
+                    Helper.WriteQtBoost(new PlainTextOutput(w));
+                }
+            }
+
             AstMethodBodyBuilder.PrintNumberOfUnhandledOpcodes();
             return files.Select(f => Tuple.Create("Compile", f.Key));
         }

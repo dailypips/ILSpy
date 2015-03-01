@@ -271,6 +271,7 @@ namespace QuantKit
             WriteAssignConstructor(def, output);
             output.WriteLine();
             WriteEqualFunction(def, output);
+            output.WriteLine();
         }
 
         static bool hasChildClass(TypeDefinition def)
@@ -428,6 +429,7 @@ namespace QuantKit
             output.Unindent();
             output.WriteLine("{");
             output.WriteLine("}");
+            output.WriteLine();
         }
 
         static void WriteMethod(MethodDefinition def, ITextOutput output)
@@ -478,6 +480,7 @@ namespace QuantKit
                 output.Unindent();
             }
             output.WriteLine("}");
+            output.WriteLine();
         }
 
         static void WriteFieldMethodBody(FieldDefinition def, ITextOutput output, bool isRead)
@@ -504,6 +507,7 @@ namespace QuantKit
                 output.Unindent();
                 output.WriteLine("}");
             }
+            output.WriteLine();
         }
 
         static void WriteProxyClassBody(TypeDefinition def, ITextOutput output)
@@ -533,14 +537,14 @@ namespace QuantKit
                 foreach (var m in ctorSections)
                 {
                     WriteCtor(m, output);
-                    output.WriteLine();
+                    //output.WriteLine();
                 }
-                if (ctorSections.Count() > 0)
-                    output.WriteLine();
+                //if (ctorSections.Count() > 0)
+                //    output.WriteLine();
                 WriteAddCppMethod(def, output);
 
-                if (publicSections.Count() > 0 || protectedSection.Count() > 0 || privateSection.Count() > 0)
-                    output.WriteLine();
+               // if (publicSections.Count() > 0 || protectedSection.Count() > 0 || privateSection.Count() > 0)
+               //     output.WriteLine();
             }
 
             /* write public method */
@@ -554,11 +558,11 @@ namespace QuantKit
                     WriteFieldMethodBody(f, output, true);
                     WriteFieldAsMethod(f, output, false);
                     WriteFieldMethodBody(f, output, false);
-                    if (i < GetAndSet.Count() - 1)
-                        output.WriteLine();
+                    //if (i < GetAndSet.Count() - 1)
+                    //    output.WriteLine();
                 }
-                if (GetAndSet.Count() > 0 && OnlySet.Count() > 0)
-                    output.WriteLine();
+                //if (GetAndSet.Count() > 0 && OnlySet.Count() > 0)
+                //    output.WriteLine();
 
                 for (int i = 0; i < OnlySet.Count(); ++i)
                 {
@@ -567,23 +571,23 @@ namespace QuantKit
                     WriteFieldMethodBody(f, output, true);
                     WriteFieldAsMethod(f, output, false);
                     WriteFieldMethodBody(f, output, false);
-                    if (i < OnlySet.Count() - 1)
-                        output.WriteLine();
+                    //if (i < OnlySet.Count() - 1)
+                    //    output.WriteLine();
                 }
 
-                if (OnlyGet.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0))
-                    output.WriteLine();
+                //if (OnlyGet.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0))
+                //    output.WriteLine();
                 for (int i = 0; i < OnlyGet.Count(); ++i)
                 {
                     var f = OnlyGet[i];
                     WriteFieldAsMethod(f, output, true);
                     WriteFieldMethodBody(f, output, true);
-                    if (i < OnlyGet.Count() - 1)
-                        output.WriteLine();
+                    //if (i < OnlyGet.Count() - 1)
+                    //    output.WriteLine();
                 }
 
-                if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
-                    output.WriteLine();
+                //if (publicSections.Count() > 0 && (GetAndSet.Count() > 0 || OnlySet.Count() > 0 || OnlyGet.Count() > 0))
+                //    output.WriteLine();
 
                 var info = InfoUtil.Info(def);
                 foreach (var m in publicSections)
@@ -592,7 +596,6 @@ namespace QuantKit
                     if (!(info.isDerivedClass && (minfo.modifiers.HasFlag(Modifiers.Virtual) || minfo.modifiers.HasFlag(Modifiers.Override))))
                     {
                         WriteMethod(m, output);
-                        output.WriteLine();
                     }
                 }
                 //if (protectedSection.Count() > 0 || privateSection.Count() > 0)
@@ -677,7 +680,8 @@ namespace QuantKit
 
             output.WriteLine("// Pubic API ");
             output.WriteLine();
-            if(info.isDerivedClass){
+            if(info.isDerivedClass && info.Fields.Count() > 0)
+            {
                 output.WriteLine("QK_IMPLEMENTATION_PRIVATE(" + info.Name + ")");
                 output.WriteLine();
             }
@@ -687,11 +691,11 @@ namespace QuantKit
 
             if (!def.IsInterface && !Helper.isClassAsEnum(def) && !info.isDerivedClass)
             {
-                output.WriteLine();
-                output.WriteLine("QDataStream& " + def.Name + "::operator<<(QDataStream &stream, const " + def.Name + " &" +def.Name.ToLower() +")");
+                //output.WriteLine();
+                output.WriteLine("QDebug " + def.Name + "::operator<<(QDebug os, const " + def.Name + " &" +def.Name.ToLower() +")");
                 output.WriteLine("{");
                 output.Indent();
-                output.WriteLine("return stream << " + def.Name.ToLower()+".toString();");
+                output.WriteLine("return os << " + def.Name.ToLower()+".toString();");
                 output.Unindent();
                 output.WriteLine("}");
             }

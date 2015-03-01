@@ -154,11 +154,8 @@ namespace QuantKit
             output.WriteLine("#endif // __QUANTKIT_QTBOOST_H__");
         }
 
-        public static void WriteQtExtension(ITextOutput output)
+        public static void WriteQtExtensionBody(ITextOutput output)
         {
-            output.WriteLine("#ifndef __QUANTKIT_QT_EXTENSION_H__");
-            output.WriteLine("#define __QUANTKIT_QT_EXTENSION_H__");
-            output.WriteLine();
             output.WriteLine("#define QK_DECLARE_PRIVATE(Class) \\");
             output.WriteLine("   inline Internal::Class##Private* d(); \\");
             output.WriteLine("   inline const Internal::Class##Private* d() const ;");
@@ -166,6 +163,14 @@ namespace QuantKit
             output.WriteLine("#define QK_IMPLEMENTATION_PRIVATE(Class) \\");
             output.WriteLine("   inline Internal::Class##Private* Class::d() { return static_cast<Internal::Class##Private*>(d_ptr.data()); } \\");
             output.WriteLine("   inline const Internal::Class##Private* Class::d() const { return static_cast<const Internal::Class##Private* const>(d_ptr.data());}");
+        }
+
+        public static void WriteQtExtension(ITextOutput output)
+        {
+            output.WriteLine("#ifndef __QUANTKIT_QT_EXTENSION_H__");
+            output.WriteLine("#define __QUANTKIT_QT_EXTENSION_H__");
+            output.WriteLine();
+            WriteQtExtensionBody(output);
             output.WriteLine();
             output.WriteLine("#endif // __QUANTKIT_QT_EXTENSION_H__");
         }
@@ -180,7 +185,7 @@ namespace QuantKit
             output.WriteLine("#include <boost/multi_index/member.hpp>");
             output.WriteLine("#include <boost/multi_index/tag.hpp>");
             output.WriteLine();
-            output.WriteLine("#include \"qt_boost.h\"");
+            output.WriteLine("#include \"quantkit_boost.h\"");
             output.WriteLine();
             output.WriteLine("namepsace QuantKit {");
             output.WriteLine();

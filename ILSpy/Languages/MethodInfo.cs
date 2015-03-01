@@ -393,14 +393,17 @@ namespace QuantKit
                     olist.Add(": " + this.def.DeclaringType.BaseType.Name + "Private (" + this.baseInit + ")");
                     isFirst = false;
                 }
-                if (isFirst)
-                {
-                    line = ": ";
-                    isFirst = false;
-                }
-                else line = ", ";
+
                 foreach (var cinfo in this.initList)
                 {
+                    if (isFirst)
+                    {
+                        line = ": ";
+                        isFirst = false;
+                    }
+                    else
+                        line = ", ";
+
                     if (cinfo.field.Name == "m_currencyId" && cinfo.initExpr.Trim() == "148")
                         olist.Add(line + cinfo.field.Name + "(CurrencyId::USD)");
                     else
